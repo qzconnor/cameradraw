@@ -87,6 +87,43 @@ export interface LoadedImage {
   document: EditorDocument | null
 }
 
+/**
+ * `unsupported`: not an installed app (development) · `idle`: not checked yet ·
+ * `up-to-date` / `available`: result of the last check.
+ */
+export type UpdateStatus =
+  | 'unsupported'
+  | 'idle'
+  | 'checking'
+  | 'up-to-date'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+
+export interface UpdateState {
+  status: UpdateStatus
+  /** Installed version. */
+  current: string
+  /** Version the update brings (available, downloading, downloaded – kept after an error). */
+  next: string | null
+  /** Download progress in percent. */
+  progress: number
+  /** End of the last check (ms since epoch). */
+  checkedAt: number | null
+  error: string | null
+}
+
+/** A published release with its notes (from GitHub). */
+export interface ReleaseNote {
+  version: string
+  /** ISO date of publication. */
+  date: string
+  /** Release notes as HTML, rendered (and sanitized) by GitHub. */
+  html: string
+  url: string
+}
+
 export const IPC = {
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
@@ -111,7 +148,14 @@ export const IPC = {
   buttonsStatusChanged: 'buttons:status-changed',
   buttonsPressed: 'buttons:pressed',
   controlsWatchBrightness: 'controls:watch-brightness',
-  controlsBrightness: 'controls:brightness'
+  controlsBrightness: 'controls:brightness',
+  updatesState: 'updates:state',
+  updatesCheck: 'updates:check',
+  updatesDownload: 'updates:download',
+  updatesInstall: 'updates:install',
+  updatesReleases: 'updates:releases',
+  updatesChanged: 'updates:changed',
+  updatesShow: 'updates:show'
 } as const
 
 export const MEDIA_SCHEME = 'cdraw'

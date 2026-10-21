@@ -37,6 +37,8 @@ die auch später noch Form für Form bearbeitbar bleiben.
   dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital.
 - **Geräte-Module** – Gerätetypen bringen eigene Funktionen mit, z. B. Foto- und Zoom-Tasten des
   Generalplus-USB-Mikroskops.
+- **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
+  installiert sie mit einem Neustart. Die Versionshinweise aller Versionen stehen im Updates-Panel.
 
 <table>
   <tr>
@@ -53,7 +55,11 @@ die auch später noch Form für Form bearbeitbar bleiben.
 
 ## Schnellstart
 
-Voraussetzung: [Node.js](https://nodejs.org/) 22 oder neuer.
+**Installieren:** den Windows-Installer `cameradraw-<version>-setup.exe` aus den
+[Releases](https://github.com/qzconnor/cameradraw/releases/latest) herunterladen und starten.
+Weitere Updates kommen dann über die App.
+
+**Aus dem Quellcode** – Voraussetzung: [Node.js](https://nodejs.org/) 22 oder neuer.
 
 ```bash
 git clone https://github.com/qzconnor/cameradraw.git
@@ -124,16 +130,57 @@ Speicherordner/
   hängt CameraDraw eine Nummer an.
 - Löschen verschiebt Bilder und Projekte in den Papierkorb.
 
+## Updates und Releases
+
+**In der App:** CameraDraw sucht beim Start und danach alle 4 Stunden nach einer neuen Version.
+Gibt es eine, erscheint ein Hinweis (im Hintergrund auch eine Windows-Benachrichtigung) und in der
+Titelleiste der Knopf **Update**. Im Updates-Panel lässt sich das Update herunterladen und mit einem
+Neustart installieren – oder es wird beim nächsten Beenden installiert. Nach einem Update ist die
+neue Version dort hervorgehoben, bis ihre Versionshinweise einmal geöffnet wurden.
+
+**Releases** erstellt [semantic-release](https://semantic-release.gitbook.io/) bei jedem Merge in
+`master` (`.github/workflows/release.yml`):
+
+1. Die nächste Version ergibt sich aus den Commits seit dem letzten Release (siehe unten).
+2. Auf einem Windows-Runner werden App und Hintergrunddienst gebaut, dann der Installer.
+3. Das GitHub-Release bekommt Versionshinweise, den Installer, die Blockmap und `latest.yml` – aus
+   dieser Datei liest electron-updater, ob es etwas Neues gibt.
+
+Die Version in `package.json` setzt semantic-release nur für den Build; im Repository bleibt sie
+unverändert, damit nichts direkt nach `master` geschrieben werden muss.
+
+## Mitarbeiten
+
+`master` ist der Release-Branch und geschützt: Direkte Commits sind nicht möglich, Änderungen kommen
+nur über Pull Requests aus `feature/…`- bzw. `fix/…`-Branches. Ein PR braucht grüne Prüfungen
+(**Typecheck & Lint**, **Conventional-Commit-Titel**) und wird per Squash gemergt – sein **Titel**
+wird dabei zur Commit-Nachricht und bestimmt die nächste Version:
+
+| PR-Titel                                                      | Release               |
+| ------------------------------------------------------------- | --------------------- |
+| `fix: Galerie lädt nach dem Umbenennen neu`                   | Patch (1.0.0 → 1.0.1) |
+| `feat: Bilder als PDF exportieren`                            | Minor (1.0.0 → 1.1.0) |
+| `feat!: Neues Speicherformat` oder `BREAKING CHANGE:` im Text | Major (1.0.0 → 2.0.0) |
+| `docs: …`, `refactor: …`, `ci: …`, `chore: …`                 | kein Release          |
+
+```bash
+git switch -c feature/pdf-export
+# … ändern, committen …
+git push -u origin feature/pdf-export
+gh pr create --title "feat: Bilder als PDF exportieren"
+```
+
 ## Entwicklung
 
-| Befehl                  | Zweck                                                      |
-| ----------------------- | ---------------------------------------------------------- |
-| `npm run dev`           | App mit Hot Reload starten                                 |
-| `npm run typecheck`     | TypeScript für Main und Renderer prüfen                    |
-| `npm run lint`          | ESLint                                                     |
-| `npm run format`        | Prettier                                                   |
-| `npm run build:win`     | Windows-Installer bauen (`dist/`), inkl. Hintergrunddienst |
-| `npm run build:service` | nur den Hintergrunddienst bauen (`service/publish/`)       |
+| Befehl                  | Zweck                                                         |
+| ----------------------- | ------------------------------------------------------------- |
+| `npm run dev`           | App mit Hot Reload starten                                    |
+| `npm run typecheck`     | TypeScript für Main und Renderer prüfen                       |
+| `npm run lint`          | ESLint                                                        |
+| `npm run format`        | Prettier                                                      |
+| `npm run build:win`     | Windows-Installer bauen (`dist/`), inkl. Hintergrunddienst    |
+| `npm run build:service` | nur den Hintergrunddienst bauen (`service/publish/`)          |
+| `npm run release:build` | Build für das Release (wie `build:win`, ohne Veröffentlichen) |
 
 Der Hintergrunddienst (`service/`, C#) braucht zum Bauen das .NET-SDK (10) und die
 Visual-Studio-C++-Build-Tools (NativeAOT). Ohne ihn läuft die App normal, nur die Foto-Taste am
@@ -154,20 +201,22 @@ src/
   main/              settings.ts (JSON in userData), library.ts (Bilder und Projekte im
                      Speicherordner), protocol.ts (cdraw:// für Bilder/Thumbnails), cameras.ts
                      (Windows-Geräteverwaltung: echte vs. virtuelle Kameras), buttons.ts (Dienst),
-                     controls.ts (Helligkeit lesen für Zoom-Tasten), ipc.ts
+                     controls.ts (Helligkeit lesen für Zoom-Tasten), updater.ts (Updates und
+                     Versionshinweise von GitHub), ipc.ts
   preload/           window.api (contextBridge, sandboxed)
   renderer/src/
     stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom), gallery (Projekte,
-                     Suche, Sortierung), editor, panels, hardware, modules
+                     Suche, Sortierung), editor, updates, panels, hardware, modules
     composables/     useDrawingCanvas (fabric.js-Canvas, Werkzeuge, Undo/Redo, Export),
                      useGalleryDrag (Drag & Drop in der Galerie)
     editor/          Werkzeug-Definitionen, Formen, History
     lib/             gallery.ts (Filtern und Sortieren), Bild- und Kamera-Hilfen
     modules/         Geräte-Module – eine Datei pro Gerätetyp, Liste in index.ts
-    components/      camera/, editor/, gallery/, settings/, modules/, layout/, common/,
-                     ui/ (shadcn-vue)
+    components/      camera/, editor/, gallery/, settings/, modules/, updates/, layout/,
+                     common/, ui/ (shadcn-vue)
 service/             Windows-Dienst „CameraDraw Buttons“ (C#, NativeAOT) für Kamera-Foto-Tasten
 scripts/             build-service.mjs
+.github/workflows/   ci.yml (PR-Prüfungen), pr-title.yml, release.yml (semantic-release)
 ```
 
 ## Technische Details

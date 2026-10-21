@@ -9,6 +9,7 @@ import TitleBar from '@/components/layout/TitleBar.vue'
 import ModulesSheet from '@/components/modules/ModulesSheet.vue'
 import SettingsSheet from '@/components/settings/SettingsSheet.vue'
 import SetupDialog from '@/components/settings/SetupDialog.vue'
+import UpdatesSheet from '@/components/updates/UpdatesSheet.vue'
 import { Toaster } from '@/components/ui/sonner'
 import { Spinner } from '@/components/ui/spinner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -17,17 +18,20 @@ import { useEditorStore } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
 import { useHardwareStore } from '@/stores/hardware'
 import { useSettingsStore } from '@/stores/settings'
+import { useUpdatesStore } from '@/stores/updates'
 
 const settings = useSettingsStore()
 const camera = useCameraStore()
 const gallery = useGalleryStore()
 const hardware = useHardwareStore()
 const editor = useEditorStore()
+const updates = useUpdatesStore()
 
 const flash = ref<InstanceType<typeof CaptureFlash> | null>(null)
 
 onMounted(async () => {
   await settings.load()
+  void updates.init()
   gallery.init()
   hardware.init()
   await camera.init()
@@ -62,6 +66,7 @@ onMounted(async () => {
     <GallerySheet />
     <SettingsSheet />
     <ModulesSheet />
+    <UpdatesSheet />
     <SetupDialog />
     <DiscardChangesDialog />
     <Toaster theme="dark" position="bottom-right" :offset="16" />

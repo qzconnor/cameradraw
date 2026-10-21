@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/types'
 import type { CameraDrawApi } from '@shared/api'
+import type { UpdateState } from '@shared/types'
 import type { BrightnessEvent, ButtonServiceStatus, StillButtonEvent } from '@shared/devices'
 
 const api: CameraDrawApi = {
@@ -56,6 +57,23 @@ const api: CameraDrawApi = {
         callback(event)
       ipcRenderer.on(IPC.controlsBrightness, listener)
       return () => ipcRenderer.removeListener(IPC.controlsBrightness, listener)
+    }
+  },
+  updates: {
+    state: () => ipcRenderer.invoke(IPC.updatesState),
+    check: () => ipcRenderer.invoke(IPC.updatesCheck),
+    download: () => ipcRenderer.invoke(IPC.updatesDownload),
+    install: () => ipcRenderer.send(IPC.updatesInstall),
+    releases: () => ipcRenderer.invoke(IPC.updatesReleases),
+    onChanged: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, state: UpdateState): void => callback(state)
+      ipcRenderer.on(IPC.updatesChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.updatesChanged, listener)
+    },
+    onShow: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on(IPC.updatesShow, listener)
+      return () => ipcRenderer.removeListener(IPC.updatesShow, listener)
     }
   }
 }

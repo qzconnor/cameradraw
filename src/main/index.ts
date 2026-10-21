@@ -6,6 +6,7 @@ import { getSettings, loadSettings } from './settings'
 import { handleMediaProtocol, registerMediaScheme } from './protocol'
 import { startButtonService } from './buttons'
 import { registerIpc, restartLibraryWatcher } from './ipc'
+import { startUpdater } from './updater'
 
 // Matches the `--sidebar` token of the dark theme so the native window controls blend in.
 const CHROME_COLOR = '#171717'
@@ -44,6 +45,14 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Links (e.g. in the release notes) open in the browser instead of replacing the app.
+  const devServer = process.env['ELECTRON_RENDERER_URL']
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (devServer && url.startsWith(devServer)) return
+    event.preventDefault()
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+  })
+
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -76,6 +85,7 @@ app.whenReady().then(() => {
   startButtonService()
 
   createWindow()
+  startUpdater()
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

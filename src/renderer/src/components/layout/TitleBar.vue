@@ -4,6 +4,7 @@ import CameraSelect from '@/components/camera/CameraSelect.vue'
 import GalleryButton from '@/components/gallery/GalleryButton.vue'
 import ModulesButton from '@/components/modules/ModulesButton.vue'
 import SettingsButton from '@/components/settings/SettingsButton.vue'
+import UpdatesButton from '@/components/updates/UpdatesButton.vue'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +35,7 @@ const isMac = window.api.platform === 'darwin'
     <CameraSelect size="sm" class="no-drag max-w-72" />
 
     <div class="no-drag ml-auto flex items-center gap-1">
+      <UpdatesButton />
       <GalleryButton />
       <SettingsButton />
       <ModulesButton />

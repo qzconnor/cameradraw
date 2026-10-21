@@ -5,6 +5,13 @@ import { listSystemCameras } from './cameras'
 import { registerControlsIpc } from './controls'
 import { getAppState, getSettings, isWritableDir, updateSettings } from './settings'
 import {
+  checkForUpdates,
+  downloadUpdate,
+  getUpdateState,
+  installUpdate,
+  listReleases
+} from './updater'
+import {
   createProject,
   listLibrary,
   loadImage,
@@ -120,6 +127,12 @@ export function registerIpc(): void {
   )
 
   ipcMain.handle(IPC.systemCameras, () => listSystemCameras())
+
+  ipcMain.handle(IPC.updatesState, () => getUpdateState())
+  ipcMain.handle(IPC.updatesCheck, () => checkForUpdates())
+  ipcMain.handle(IPC.updatesDownload, () => downloadUpdate())
+  ipcMain.on(IPC.updatesInstall, () => installUpdate())
+  ipcMain.handle(IPC.updatesReleases, () => listReleases())
 
   registerButtonIpc()
   registerControlsIpc()
