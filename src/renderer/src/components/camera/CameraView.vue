@@ -21,6 +21,7 @@ import { useEditorStore } from '@/stores/editor'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
 import CameraStatusOverlay from './CameraStatusOverlay.vue'
+import PauseButton from './PauseButton.vue'
 import ShutterButton from './ShutterButton.vue'
 import ZoomControl from './ZoomControl.vue'
 
@@ -41,7 +42,9 @@ const panels = usePanelsStore()
 const video = ref<HTMLVideoElement | null>(null)
 const viewport = ref<HTMLElement | null>(null)
 const capturing = ref(false)
-const isLive = computed(() => props.active && camera.status === 'live')
+/** The camera picture is running and not paused by the user. */
+const playing = computed(() => camera.status === 'live' && !camera.paused)
+const isLive = computed(() => props.active && playing.value)
 const canCapture = computed(() => isLive.value && !capturing.value)
 
 /** The camera picture without black bars baked into its frames (e.g. a phone held upright). */
@@ -69,13 +72,18 @@ watch(
   { immediate: true }
 )
 
-// Resume playback when coming back from the editor.
+// Whether the view is on screen – the camera may be switched off meanwhile (see settings).
 watch(
   () => props.active,
-  (active) => {
-    if (active) void video.value?.play().catch(() => undefined)
-  }
+  (active) => camera.setViewShown(active),
+  { immediate: true }
 )
+
+// Stop the video while paused; resume it when unpaused or when coming back from the editor.
+watch([() => props.active, () => camera.paused], ([active, paused]) => {
+  if (paused) video.value?.pause()
+  else if (active) void video.value?.play().catch(() => undefined)
+})
 
 async function capture(): Promise<void> {
   if (!canCapture.value || !video.value) return
@@ -144,7 +152,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       :picture="picture"
       :zoom="digitalZoom"
       :mirror="settings.mirror"
-      :paused="!active || camera.status !== 'live'"
+      :paused="!isLive"
     />
 
     <!-- Picture area in the camera's aspect ratio. object-cover cuts off baked-in (centred) black
@@ -152,9 +160,10 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
          that a capture keeps. -->
     <div class="absolute inset-0 grid place-items-center">
       <div ref="viewport" class="relative overflow-hidden" :style="viewportStyle">
+        <!-- No autoplay while paused, so a camera that reconnects meanwhile stays stopped. -->
         <video
           ref="video"
-          autoplay
+          :autoplay="!camera.paused"
           muted
           playsinline
           class="size-full object-cover"
@@ -165,21 +174,27 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 
     <CameraStatusOverlay />
 
-    <!-- Bottom controls on one line: zoom left, shutter centred, mirror right. The row lets clicks
-         through (pointer-events-none) so it never covers anything; only the controls catch them. -->
+    <!-- Bottom controls on one line: zoom left, shutter centred, pause right next to it and mirror
+         right. The row lets clicks through (pointer-events-none) so it never covers anything; only
+         the controls catch them. -->
     <div
       class="pointer-events-none absolute inset-x-4 bottom-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4"
     >
       <div class="justify-self-start">
-        <ZoomControl v-if="camera.status === 'live'" class="pointer-events-auto" />
+        <ZoomControl v-if="playing" class="pointer-events-auto" />
       </div>
 
       <div class="pointer-events-auto">
         <ShutterButton :disabled="!canCapture" @click="capture" />
       </div>
 
-      <div class="justify-self-end">
-        <div v-if="camera.status === 'live'" class="glass-panel pointer-events-auto p-1">
+      <div class="flex items-center gap-4">
+        <!-- Also shown while paused and disconnected, so the pause can always be lifted. A wrapper
+             catches the clicks: the button's root is a tooltip without an element of its own. -->
+        <div v-if="camera.status === 'live' || camera.paused" class="pointer-events-auto">
+          <PauseButton :paused="camera.paused" @click="camera.setPaused(!camera.paused)" />
+        </div>
+        <div v-if="playing" class="glass-panel pointer-events-auto ml-auto p-1">
           <HintTooltip label="Bild spiegeln" side="top">
             <Toggle
               :model-value="settings.mirror"

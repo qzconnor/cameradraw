@@ -45,7 +45,8 @@ onMounted(async () => {
 
       <!-- The camera / editor fills everything below the title bar; the gallery is an overlay. -->
       <main class="relative min-h-0 flex-1 bg-stage text-stage-foreground">
-        <!-- The camera stays mounted while editing so the stream keeps running. -->
+        <!-- The camera stays mounted while editing so the stream can keep running (unless the
+             "switch the camera off when it is not shown" setting is on). -->
         <CameraView v-show="!editor.isOpen" :active="!editor.isOpen" @captured="flash?.trigger()" />
         <ImageEditor
           v-if="editor.session"

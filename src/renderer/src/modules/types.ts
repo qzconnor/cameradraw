@@ -47,8 +47,8 @@ export interface DeviceModule {
   match: UsbId[]
   capabilities: ModuleCapability[]
   /**
-   * Runs while the module is active for the live camera (e.g. listening to device buttons).
-   * Returns a cleanup function.
+   * Runs while the module is active for the live camera and the camera is not paused (e.g.
+   * listening to device buttons). Returns a cleanup function.
    */
   activate?: (context: ModuleContext) => () => void
 }

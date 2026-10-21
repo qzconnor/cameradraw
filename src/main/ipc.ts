@@ -66,6 +66,7 @@ function sanitizePatch(patch: unknown): Partial<AppSettings> {
   if (typeof p.mirror === 'boolean') out.mirror = p.mirror
   if (typeof p.ambientLight === 'boolean') out.ambientLight = p.ambientLight
   if (typeof p.preferCameraZoom === 'boolean') out.preferCameraZoom = p.preferCameraZoom
+  if (typeof p.stopCameraWhenHidden === 'boolean') out.stopCameraWhenHidden = p.stopCameraWhenHidden
   if (isStringArray(p.disabledModules)) out.disabledModules = p.disabledModules.slice(0, 100)
   if (isStringRecord(p.cameraModules)) out.cameraModules = p.cameraModules
   return out

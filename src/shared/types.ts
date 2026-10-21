@@ -12,6 +12,11 @@ export interface AppSettings {
   ambientLight: boolean
   /** Use the camera's own zoom if it has one (otherwise / when off: digital zoom). */
   preferCameraZoom: boolean
+  /**
+   * Switch the camera off (free for other apps) while its picture is not shown – paused or while
+   * editing – instead of keeping it running in the background.
+   */
+  stopCameraWhenHidden: boolean
   /** Ids of device modules the user switched off. */
   disabledModules: string[]
   /** Camera label → module id or `none`. Cameras missing here are matched automatically. */

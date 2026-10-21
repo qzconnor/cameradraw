@@ -68,9 +68,9 @@ export const useModulesStore = defineStore('modules', () => {
     await settings.update({ cameraModules: map })
   }
 
-  // Run the active module's hooks while its camera is live.
+  // Run the active module's hooks while its camera is live and not paused (no device buttons then).
   watch(
-    [activeModule, () => camera.status === 'live', currentLabel],
+    [activeModule, () => camera.status === 'live' && !camera.paused, currentLabel],
     ([module, live, label], _previous, onCleanup) => {
       if (!module?.activate || !live || !label) return
       const usb = parseUsbId(label)
