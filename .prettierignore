@@ -1,0 +1,14 @@
+out
+dist
+pnpm-lock.yaml
+LICENSE.md
+tsconfig.json
+tsconfig.*.json
+src/renderer/src/components/ui
+.agents
+.claude
+skills-lock.json
+components.json
+service/bin
+service/obj
+service/publish

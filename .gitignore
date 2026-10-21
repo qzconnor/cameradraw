@@ -1,0 +1,14 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+service/bin
+service/obj
+service/publish
+
+# Lokale KI-Agent-Dateien
+.claude
+.agents
+skills-lock.json

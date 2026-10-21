@@ -1,0 +1,117 @@
+/** Persisted application settings (stored as JSON in the userData folder). */
+export interface AppSettings {
+  /** Folder where all drawings are saved. Must be chosen on first start. */
+  saveDir: string | null
+  /** deviceId of the camera the user picked last. */
+  cameraId: string | null
+  /** Label of that camera, used to recognise it again if the deviceId changes. */
+  cameraLabel: string | null
+  /** Mirror the live preview (and captured frame) horizontally. */
+  mirror: boolean
+  /** Let the picture's colours glow into the empty space around it instead of black bars. */
+  ambientLight: boolean
+  /** Use the camera's own zoom if it has one (otherwise / when off: digital zoom). */
+  preferCameraZoom: boolean
+  /** Ids of device modules the user switched off. */
+  disabledModules: string[]
+  /** Camera label → module id or `none`. Cameras missing here are matched automatically. */
+  cameraModules: Record<string, string>
+}
+
+export interface AppState {
+  settings: AppSettings
+  /** False if `saveDir` is set but the folder no longer exists or is not writable. */
+  saveDirAvailable: boolean
+}
+
+export interface GalleryItem {
+  /** Identifies the image: `<file>` or `<project>/<file>` inside the save folder. */
+  path: string
+  /** File name, e.g. `CameraDraw_2026-10-21_15-50-12.png`. */
+  name: string
+  /** Project (sub folder of the save folder) the image is in, null if it lies directly in it. */
+  project: string | null
+  /** Full-size image, served through the `cdraw://` protocol. */
+  url: string
+  /** Small JPEG thumbnail, served through the `cdraw://` protocol. */
+  thumbUrl: string
+  /** Last modification time (ms since epoch). */
+  mtime: number
+  size: number
+  /** True if layered drawing data exists, so shapes stay individually editable. */
+  editable: boolean
+}
+
+/** A project is a sub folder of the save folder. */
+export interface GalleryProject {
+  name: string
+  /** Last modification time of the folder (ms since epoch). */
+  mtime: number
+}
+
+export interface LibraryListing {
+  projects: GalleryProject[]
+  /** Images of the save folder and of all projects. */
+  items: GalleryItem[]
+}
+
+/** Serialized drawing layer (fabric objects) on top of the base image. */
+export interface EditorDocument {
+  version: 1
+  width: number
+  height: number
+  objects: Record<string, unknown>[]
+}
+
+export interface SaveImageRequest {
+  /** Path of the image being edited, or null for a new capture. */
+  source: string | null
+  /**
+   * Where to save (`<file>` or `<project>/<file>`). Differs from `source` to rename or move the
+   * image; a missing project folder is created.
+   */
+  target: string
+  /** Flattened result image, encoded to match the file extension of `target`. */
+  image: Uint8Array
+  /** Untouched base image (camera frame), PNG. */
+  base: Uint8Array
+  document: EditorDocument
+}
+
+export interface LoadedImage {
+  path: string
+  /** Base image bytes – the original frame if available, otherwise the flattened file. */
+  base: Uint8Array
+  baseMime: string
+  /** Editable drawing layer, null if the file has no project data. */
+  document: EditorDocument | null
+}
+
+export const IPC = {
+  settingsGet: 'settings:get',
+  settingsUpdate: 'settings:update',
+  pickFolder: 'dialog:pick-folder',
+  libraryList: 'library:list',
+  librarySave: 'library:save',
+  libraryLoad: 'library:load',
+  libraryRemove: 'library:remove',
+  libraryMove: 'library:move',
+  libraryRename: 'library:rename',
+  libraryReveal: 'library:reveal',
+  libraryCreateProject: 'library:create-project',
+  libraryRenameProject: 'library:rename-project',
+  libraryRemoveProject: 'library:remove-project',
+  libraryOpenFolder: 'library:open-folder',
+  libraryChanged: 'library:changed',
+  systemCameras: 'devices:system-cameras',
+  buttonsStatus: 'buttons:status',
+  buttonsWatch: 'buttons:watch',
+  buttonsInstall: 'buttons:install',
+  buttonsUninstall: 'buttons:uninstall',
+  buttonsStatusChanged: 'buttons:status-changed',
+  buttonsPressed: 'buttons:pressed',
+  controlsWatchBrightness: 'controls:watch-brightness',
+  controlsBrightness: 'controls:brightness'
+} as const
+
+export const MEDIA_SCHEME = 'cdraw'
