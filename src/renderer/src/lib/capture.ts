@@ -10,14 +10,19 @@ export interface CapturedFrame {
  * Grabs the current video frame in full camera resolution as PNG.
  * With digital zoom only the visible centre is kept and scaled back up to full resolution
  * (like a phone camera), so the saved image matches what was on screen.
+ * `picture` is the size of the actual picture inside the frame: black bars baked in around it
+ * (centred) are cut off.
  */
 export async function captureFrame(
   video: HTMLVideoElement,
   mirror: boolean,
-  digitalZoom = 1
+  digitalZoom = 1,
+  picture?: { width: number; height: number } | null
 ): Promise<CapturedFrame> {
-  const { videoWidth: width, videoHeight: height } = video
-  if (!width || !height) throw new Error('Kein Kamerabild verfügbar')
+  const { videoWidth, videoHeight } = video
+  if (!videoWidth || !videoHeight) throw new Error('Kein Kamerabild verfügbar')
+  const width = Math.min(videoWidth, picture?.width ?? videoWidth)
+  const height = Math.min(videoHeight, picture?.height ?? videoHeight)
 
   const zoom = Math.max(1, digitalZoom)
   const cropWidth = width / zoom
@@ -34,8 +39,8 @@ export async function captureFrame(
   }
   ctx.drawImage(
     video,
-    (width - cropWidth) / 2,
-    (height - cropHeight) / 2,
+    (videoWidth - cropWidth) / 2,
+    (videoHeight - cropHeight) / 2,
     cropWidth,
     cropHeight,
     0,

@@ -7,6 +7,7 @@ import { toast } from 'vue-sonner'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import HintTooltip from '@/components/common/HintTooltip.vue'
 import { Toggle } from '@/components/ui/toggle'
+import { useVideoPicture } from '@/composables/useVideoPicture'
 import { captureFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import {
@@ -43,12 +44,10 @@ const capturing = ref(false)
 const isLive = computed(() => props.active && camera.status === 'live')
 const canCapture = computed(() => isLive.value && !capturing.value)
 
+/** The camera picture without black bars baked into its frames (e.g. a phone held upright). */
+const picture = useVideoPicture(video, isLive)
 /** Aspect ratio of the camera picture; the viewport is fitted into the stage with it. */
-const aspect = ref(16 / 9)
-useEventListener(video, ['loadedmetadata', 'resize'], () => {
-  const el = video.value
-  if (el?.videoWidth && el.videoHeight) aspect.value = el.videoWidth / el.videoHeight
-})
+const aspect = computed(() => (picture.value ? picture.value.width / picture.value.height : 16 / 9))
 
 /** Enlargement done here (digital zoom); a camera with its own zoom delivers zoomed frames. */
 const digitalZoom = computed(() => (camera.zoomMode === 'digital' ? camera.zoom : 1))
@@ -82,7 +81,7 @@ async function capture(): Promise<void> {
   if (!canCapture.value || !video.value) return
   capturing.value = true
   try {
-    const frame = await captureFrame(video.value, settings.mirror, digitalZoom.value)
+    const frame = await captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
     emit('captured')
     editor.openCapture(frame.bytes, frame.width, frame.height)
   } catch (err) {
@@ -142,13 +141,15 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       v-if="settings.ambientLight"
       :video="video"
       :frame="viewport"
+      :picture="picture"
       :zoom="digitalZoom"
       :mirror="settings.mirror"
       :paused="!active || camera.status !== 'live'"
     />
 
-    <!-- Picture area in the camera's aspect ratio. Digital zoom scales the video inside it, so the
-         visible part is exactly the centre that a capture keeps. -->
+    <!-- Picture area in the camera's aspect ratio. object-cover cuts off baked-in (centred) black
+         bars; digital zoom scales the video inside it, so the visible part is exactly the centre
+         that a capture keeps. -->
     <div class="absolute inset-0 grid place-items-center">
       <div ref="viewport" class="relative overflow-hidden" :style="viewportStyle">
         <video

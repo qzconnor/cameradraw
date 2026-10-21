@@ -16,6 +16,11 @@ const props = withDefaults(
     imageUrl?: string | null
     /** Element the picture is fitted into (object-contain). Defaults to the whole backdrop. */
     frame?: HTMLElement | null
+    /**
+     * Size of the actual picture inside the source; black bars baked in around it (centred) are
+     * cut off like the shown video does. Defaults to the whole source.
+     */
+    picture?: { width: number; height: number } | null
     /** Mirror the glow like the (mirrored) video. */
     mirror?: boolean
     /** Stop sampling, e.g. while the view is hidden or the camera is not live. */
@@ -23,7 +28,15 @@ const props = withDefaults(
     /** Digital zoom of the shown picture – only its centre (1/zoom) is visible and sampled. */
     zoom?: number
   }>(),
-  { video: null, imageUrl: null, frame: null, mirror: false, paused: false, zoom: 1 }
+  {
+    video: null,
+    imageUrl: null,
+    frame: null,
+    picture: null,
+    mirror: false,
+    paused: false,
+    zoom: 1
+  }
 )
 
 /** The glow extends this far (px) beyond the visible area, so the blur's fading fringe stays hidden. */
@@ -81,19 +94,23 @@ function draw(src: Source): void {
     el.height = ch
   }
 
+  // The picture inside the source (without baked-in bars).
+  const pw = Math.min(sw, props.picture?.width ?? sw)
+  const ph = Math.min(sh, props.picture?.height ?? sh)
+
   // Where the picture is shown (object-contain inside the frame), in canvas coordinates.
-  const fit = Math.min(inner.width / sw, inner.height / sh)
-  const w = sw * fit * kx
-  const h = sh * fit * ky
-  const x = (inner.left - outer.left + MARGIN + (inner.width - sw * fit) / 2) * kx
-  const y = (inner.top - outer.top + MARGIN + (inner.height - sh * fit) / 2) * ky
+  const fit = Math.min(inner.width / pw, inner.height / ph)
+  const w = pw * fit * kx
+  const h = ph * fit * ky
+  const x = (inner.left - outer.left + MARGIN + (inner.width - pw * fit) / 2) * kx
+  const y = (inner.top - outer.top + MARGIN + (inner.height - ph * fit) / 2) * ky
   const r = x + w
   const b = y + h
 
-  // Visible part of the source (digital zoom shows the centre only).
+  // Visible part of the source (centred picture; digital zoom shows its centre only).
   const zoom = Math.max(1, props.zoom)
-  const vw = sw / zoom
-  const vh = sh / zoom
+  const vw = pw / zoom
+  const vh = ph / zoom
   const vx = (sw - vw) / 2
   const vy = (sh - vh) / 2
   const ex = Math.max(1, vw * EDGE)
