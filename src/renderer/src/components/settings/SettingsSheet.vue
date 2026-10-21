@@ -149,6 +149,25 @@ async function openFolder(): Promise<void> {
             @update:model-value="update({ preferCameraZoom: $event })"
           />
         </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel for="settings-stop-hidden" class="cursor-pointer">
+              Kamera ausschalten, wenn sie nicht zu sehen ist
+            </FieldLabel>
+            <FieldDescription>
+              Beim Pausieren und Bearbeiten geht das Kameralicht aus und andere Apps können die
+              Kamera nutzen; danach dauert das Einschalten einen Moment. Sonst läuft sie im
+              Hintergrund weiter.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id="settings-stop-hidden"
+            class="self-center"
+            :model-value="settings.stopCameraWhenHidden"
+            @update:model-value="update({ stopCameraWhenHidden: $event })"
+          />
+        </Field>
       </FieldGroup>
     </ScrollArea>
 

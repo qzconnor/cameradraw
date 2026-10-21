@@ -13,6 +13,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const mirror = computed(() => settings.value?.mirror ?? false)
   const ambientLight = computed(() => settings.value?.ambientLight ?? true)
   const preferCameraZoom = computed(() => settings.value?.preferCameraZoom ?? true)
+  const stopCameraWhenHidden = computed(() => settings.value?.stopCameraWhenHidden ?? true)
   const disabledModules = computed(() => settings.value?.disabledModules ?? [])
   const cameraModules = computed(() => settings.value?.cameraModules ?? {})
 
@@ -45,6 +46,7 @@ export const useSettingsStore = defineStore('settings', () => {
     mirror,
     ambientLight,
     preferCameraZoom,
+    stopCameraWhenHidden,
     disabledModules,
     cameraModules,
     load,

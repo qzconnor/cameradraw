@@ -16,9 +16,10 @@ export interface CameraDevice {
  * busy      – the chosen camera exists but cannot be opened (e.g. used by another app)
  * no-camera – no camera has ever been chosen and none is connected
  * denied    – camera permission was denied
+ * off       – not shown (paused or editor open) and switched off by `stopCameraWhenHidden`
  */
 export type CameraStatus =
-  'idle' | 'starting' | 'live' | 'waiting' | 'busy' | 'no-camera' | 'denied'
+  'idle' | 'starting' | 'live' | 'waiting' | 'busy' | 'no-camera' | 'denied' | 'off'
 
 const RETRY_INTERVAL = 2000
 const MIN_REFRESH_FEEDBACK = 400
@@ -54,6 +55,14 @@ export const useCameraStore = defineStore('camera', () => {
   const zoomRange = shallowRef<ZoomRange | null>(null)
   /** Zoom factor shown to the user, 1 = no zoom. */
   const zoom = ref(1)
+  /**
+   * The user paused the camera: the picture is hidden and nothing can be captured until it is
+   * resumed. With `stopCameraWhenHidden` the camera is switched off as well (status `off`);
+   * otherwise the stream keeps running, so resuming is instant.
+   */
+  const paused = ref(false)
+  /** The live view is on screen – false while the editor is open. */
+  const viewShown = ref(true)
   /** Capture requests from outside the live view (e.g. a device's photo button). */
   const captureRequests = createEventHook<void>()
 
@@ -251,8 +260,9 @@ export const useCameraStore = defineStore('camera', () => {
   }
 
   /**
-   * Re-reads the device list and, unless the stream is running, reconnects the chosen camera.
-   * Used for device changes, the retry timer and the manual "reload" button. Never switches cameras.
+   * Re-reads the device list and, unless the stream is running or switched off, reconnects the
+   * chosen camera. Used for device changes, the retry timer and the manual "reload" button. Never
+   * switches cameras.
    */
   async function sync(): Promise<void> {
     if (syncing) {
@@ -265,7 +275,8 @@ export const useCameraStore = defineStore('camera', () => {
       do {
         syncAgain = false
         await refreshDevices()
-        if (status.value === 'live' || status.value === 'starting') continue
+        if (status.value === 'live' || status.value === 'starting' || status.value === 'off')
+          continue
         if (selectedId.value) await connectChosen()
         // Nothing was ever chosen – picking the first camera is not "switching".
         else if (devices.value.length) await select(devices.value[0].id)
@@ -287,6 +298,8 @@ export const useCameraStore = defineStore('camera', () => {
     selectedLabel.value = device.label
     void settings.update({ cameraId: device.id, cameraLabel: device.label })
     zoom.value = 1 // a different camera starts unzoomed
+    // Switched off by a pause: the new camera starts when the pause is lifted.
+    if (status.value === 'off') return
     await start(device.id)
   }
 
@@ -320,6 +333,33 @@ export const useCameraStore = defineStore('camera', () => {
     }
   }
 
+  function setPaused(value: boolean): void {
+    paused.value = value
+  }
+
+  function setViewShown(value: boolean): void {
+    viewShown.value = value
+  }
+
+  /** The picture is not shown and `stopCameraWhenHidden` asks to switch the camera off meanwhile. */
+  const switchedOff = computed(
+    () => (paused.value || !viewShown.value) && settings.stopCameraWhenHidden
+  )
+
+  // Switch the camera off when it gets hidden (or when the setting changes meanwhile), on again
+  // once it is shown – e.g. after resuming or closing the editor.
+  watch(switchedOff, (off) => {
+    if (off) {
+      startToken++ // drops a camera that is still being opened
+      stopRetry()
+      stopStream()
+      status.value = 'off'
+    } else if (status.value === 'off') {
+      status.value = 'idle'
+      void sync()
+    }
+  })
+
   /** Freezes the picture like the Space key – the live view decides whether that fits right now. */
   function requestCapture(): void {
     void captureRequests.trigger()
@@ -335,6 +375,7 @@ export const useCameraStore = defineStore('camera', () => {
     stream,
     resolution,
     refreshing,
+    paused,
     zoom,
     zoomMode,
     hasCameraZoom,
@@ -344,6 +385,8 @@ export const useCameraStore = defineStore('camera', () => {
     refresh,
     setZoom,
     stepZoom,
+    setPaused,
+    setViewShown,
     requestCapture,
     onCaptureRequest: captureRequests.on
   }

@@ -11,6 +11,7 @@ const DEFAULTS: AppSettings = {
   mirror: false,
   ambientLight: true,
   preferCameraZoom: true,
+  stopCameraWhenHidden: true,
   disabledModules: [],
   cameraModules: {}
 }

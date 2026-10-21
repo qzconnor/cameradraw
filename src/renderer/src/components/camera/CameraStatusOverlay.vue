@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { CameraOffIcon, LockIcon, UnplugIcon, VideoOffIcon } from '@lucide/vue'
+import { CameraOffIcon, LockIcon, PauseIcon, UnplugIcon, VideoOffIcon } from '@lucide/vue'
 import {
   Empty,
   EmptyContent,
@@ -64,6 +64,19 @@ const content = computed<OverlayContent | null>(() => {
           'Der Zugriff auf die Kamera wurde verweigert. Erlaube den Kamera-Zugriff für Desktop-Apps in den Datenschutzeinstellungen deines Systems und lade die Kameraliste danach neu.',
         picker: true
       }
+    case 'off':
+    case 'live': {
+      if (!camera.paused) return null
+      const state =
+        camera.status === 'off'
+          ? `${name} ist ausgeschaltet und für andere Apps frei.`
+          : 'Das Livebild ist ausgeblendet, die Kamera läuft im Hintergrund weiter.'
+      return {
+        icon: PauseIcon,
+        title: 'Kamera pausiert',
+        description: `${state} Solange die Kamera pausiert ist, lässt sich kein Bild anhalten – auch nicht mit der Foto-Taste der Kamera.`
+      }
+    }
     default:
       return null
   }
