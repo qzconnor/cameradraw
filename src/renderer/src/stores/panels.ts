@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-export type PanelName = 'gallery' | 'settings' | 'modules'
+export type PanelName = 'gallery' | 'settings' | 'modules' | 'updates'
 
 /** Side panels sliding in from the right – only one is open at a time. */
 export const usePanelsStore = defineStore('panels', () => {

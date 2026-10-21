@@ -11,7 +11,9 @@ import type {
   GalleryItem,
   LibraryListing,
   LoadedImage,
-  SaveImageRequest
+  ReleaseNote,
+  SaveImageRequest,
+  UpdateState
 } from './types'
 
 /** API exposed by the preload script as `window.api`. */
@@ -68,5 +70,18 @@ export interface CameraDrawApi {
     /** Devices whose UVC brightness should be read; replaces the previous list. */
     watchBrightness(devices: UsbDeviceId[]): void
     onBrightness(callback: (event: BrightnessEvent) => void): () => void
+  }
+  /** App updates from the GitHub releases (only in the installed app) and their notes. */
+  updates: {
+    state(): Promise<UpdateState>
+    check(): Promise<void>
+    download(): Promise<void>
+    /** Quits, installs the downloaded update and starts the new version. */
+    install(): void
+    /** Published releases, newest first. */
+    releases(): Promise<ReleaseNote[]>
+    onChanged(callback: (state: UpdateState) => void): () => void
+    /** The update notification of the system was clicked. */
+    onShow(callback: () => void): () => void
   }
 }

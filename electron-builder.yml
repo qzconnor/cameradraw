@@ -42,3 +42,8 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# Where electron-updater looks for new versions (the releases created by semantic-release).
+publish:
+  provider: github
+  owner: qzconnor
+  repo: cameradraw

@@ -166,6 +166,30 @@
   cursor: pointer;
 }
 
+/* Release notes as rendered by GitHub (UpdatesSheet). The version heading is shown by the sheet. */
+@layer components {
+  .release-notes {
+    @apply flex flex-col gap-1 text-sm text-muted-foreground;
+  }
+  .release-notes :is(h1, h2),
+  .release-notes .markdown-heading:has(:is(h1, h2)),
+  .release-notes .anchor {
+    @apply hidden;
+  }
+  .release-notes h3 {
+    @apply mt-2 text-xs font-semibold tracking-wide text-foreground uppercase;
+  }
+  .release-notes ul {
+    @apply flex list-disc flex-col gap-1 pl-4;
+  }
+  .release-notes a {
+    @apply text-foreground underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground;
+  }
+  .release-notes code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-xs;
+  }
+}
+
 /* While a gallery image is dragged (useGalleryDrag), everything shows the grabbing hand. */
 html[data-dragging] * {
   cursor: grabbing !important;
