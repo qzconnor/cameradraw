@@ -128,7 +128,9 @@ Speicherordner/
   Zeichnungs-Ebenen (`*.json`).
 - Umbenennen und Verschieben nimmt die Ebenen mit. Ist der Name im Zielprojekt schon vergeben,
   hängt CameraDraw eine Nummer an.
-- Löschen verschiebt Bilder und Projekte in den Papierkorb.
+- Löschen verschiebt Bilder und Projekte in den Papierkorb, Bilder zusammen mit ihren Ebenen. Wer
+  ein Bild von dort wiederherstellt, holt auch `*.base.png` und `*.json` zurück, dann bleibt es
+  bearbeitbar.
 
 ## Updates und Releases
 
