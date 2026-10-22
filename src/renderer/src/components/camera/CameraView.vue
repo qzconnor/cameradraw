@@ -92,7 +92,11 @@ async function capture(): Promise<void> {
   try {
     const frame = await captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
     emit('captured')
-    editor.openCapture(frame.bytes, frame.width, frame.height)
+    // Zoom and frame width carry a calibration of the camera over to this picture.
+    editor.openCapture(frame.bytes, frame.width, frame.height, {
+      zoom: camera.zoom,
+      frameWidth: frame.frameWidth
+    })
     // A side panel (e.g. the gallery, open during a photo button press) would cover the editor.
     panels.closeAll()
   } catch (err) {

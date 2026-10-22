@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BoxSelectIcon, PaintBucketIcon, Trash2Icon, TypeIcon } from '@lucide/vue'
+import { BoxSelectIcon, PaintBucketIcon, RulerIcon, Trash2Icon, TypeIcon } from '@lucide/vue'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -25,6 +25,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   addText: []
   toggleFill: []
+  /** Use the measuring line under the pointer to set the scale. */
+  calibrate: []
   delete: []
   selectAll: []
 }>()
@@ -54,6 +56,10 @@ const several = computed(() => (props.spot?.objects.length ?? 0) > 1)
           <ContextMenuItem v-if="spot?.fillable" @select="emit('toggleFill')">
             <PaintBucketIcon />
             {{ spot.filled ? 'Füllung entfernen' : several ? 'Formen füllen' : 'Form füllen' }}
+          </ContextMenuItem>
+          <ContextMenuItem v-if="spot?.measurement" @select="emit('calibrate')">
+            <RulerIcon />
+            Als Maßstab verwenden …
           </ContextMenuItem>
           <ContextMenuItem variant="destructive" @select="emit('delete')">
             <Trash2Icon />

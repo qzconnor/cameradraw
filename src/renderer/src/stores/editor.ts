@@ -1,9 +1,11 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
-import type { EditorDocument } from '@shared/types'
+import type { CaptureInfo, EditorDocument } from '@shared/types'
 import type { DrawStyle, Tool } from '@/editor/tools'
 import { bytesToObjectUrl, canvasToBytes, imageSize } from '@/lib/image'
+import { useCameraStore } from './camera'
+import { useSettingsStore } from './settings'
 
 export interface EditorSession {
   /** Path of the image when editing from the gallery, null for a fresh capture. */
@@ -17,6 +19,10 @@ export interface EditorSession {
   document: EditorDocument | null
   /** When the picture was taken: a fresh capture now, an image from the gallery keeps its date. */
   capturedAt: number
+  /** Scale for measuring: of the image, or for a fresh capture from its camera's calibration. */
+  micronsPerPixel: number | null
+  /** How the picture was taken (pictures of older versions: assumed without zoom). */
+  capture: CaptureInfo
 }
 
 /** Converts arbitrary image bytes to PNG (project base images are always PNG). */
@@ -95,7 +101,23 @@ export const useEditorStore = defineStore('editor', () => {
     pendingAction.value = null
   }
 
-  function openCapture(bytes: Uint8Array, width: number, height: number): void {
+  /**
+   * Scale of a new picture from the last calibration of its camera: finer when zoomed in, and
+   * converted if the camera delivers frames of another width than when it was calibrated.
+   */
+  function scaleOfCapture(capture: CaptureInfo): number | null {
+    const label = useCameraStore().selectedLabel
+    const scale = label ? useSettingsStore().cameraScales[label] : undefined
+    if (!scale) return null
+    return (scale.micronsPerPixel * scale.frameWidth) / capture.frameWidth / capture.zoom
+  }
+
+  function openCapture(
+    bytes: Uint8Array,
+    width: number,
+    height: number,
+    capture: CaptureInfo
+  ): void {
     setSession({
       path: null,
       baseUrl: bytesToObjectUrl(bytes, 'image/png'),
@@ -103,7 +125,9 @@ export const useEditorStore = defineStore('editor', () => {
       width,
       height,
       document: null,
-      capturedAt: Date.now()
+      capturedAt: Date.now(),
+      micronsPerPixel: scaleOfCapture(capture),
+      capture
     })
   }
 
@@ -124,7 +148,9 @@ export const useEditorStore = defineStore('editor', () => {
           width,
           height,
           document: loaded.document,
-          capturedAt: loaded.capturedAt
+          capturedAt: loaded.capturedAt,
+          micronsPerPixel: loaded.document?.micronsPerPixel ?? null,
+          capture: loaded.document?.capture ?? { zoom: 1, frameWidth: width }
         })
       } finally {
         loading.value = false

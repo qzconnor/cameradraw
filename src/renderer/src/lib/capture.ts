@@ -4,6 +4,8 @@ export interface CapturedFrame {
   bytes: Uint8Array
   width: number
   height: number
+  /** Width of the camera frame it was taken from (the picture may be cut out of it). */
+  frameWidth: number
 }
 
 /**
@@ -48,5 +50,5 @@ export async function captureFrame(
     width,
     height
   )
-  return { bytes: await canvasToBytes(canvas), width, height }
+  return { bytes: await canvasToBytes(canvas), width, height, frameWidth: videoWidth }
 }

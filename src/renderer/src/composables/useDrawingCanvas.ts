@@ -14,7 +14,15 @@ import {
 } from 'fabric'
 import type { EditorDocument } from '@shared/types'
 import { CanvasHistory } from '@/editor/history'
-import { CUSTOM_PROPS, createShape, kindOf, tag } from '@/editor/shapes'
+import {
+  createMeasure,
+  isMeasure,
+  lockMeasure,
+  measuredLength,
+  relabel,
+  restyleMeasure
+} from '@/editor/measure'
+import { CUSTOM_PROPS, createShape, kindOf, snapAngle, tag } from '@/editor/shapes'
 import { isShapeTool, type DrawStyle, type Tool } from '@/editor/tools'
 import { canvasToBytes, withAlpha } from '@/lib/image'
 import {
@@ -53,6 +61,8 @@ export interface LoadImageOptions {
   width: number
   height: number
   document: EditorDocument | null
+  /** Scale for the measuring lines, null = lengths in pixels. */
+  micronsPerPixel: number | null
 }
 
 export type StyleChange = 'color' | 'strokeWidth' | 'fontSize'
@@ -69,6 +79,8 @@ export interface CanvasSpot {
   fillable: boolean
   /** … and all of those are filled already. */
   filled: boolean
+  /** The one object is a measuring line – it can set the scale. */
+  measurement: FabricObject | null
 }
 
 interface UseDrawingCanvasOptions {
@@ -94,6 +106,10 @@ export interface DrawingCanvas {
   stepViewZoom(direction: 1 | -1): void
   /** Shows the whole image again. */
   resetView(): void
+  /** Scale of the picture (µm per image pixel), null = measuring in pixels. */
+  micronsPerPixel: Ref<number | null>
+  /** Sets the scale; every measuring line shows its length with it right away. */
+  setScale(micronsPerPixel: number | null): void
   undo(): void
   redo(): void
   deleteSelection(): void
@@ -142,6 +158,9 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const isEmpty = ref(true)
   const dirty = ref(false)
   const viewZoom = ref(1)
+  const micronsPerPixel = ref<number | null>(null)
+  /** Scale as loaded or last saved – a different one is an unsaved change. */
+  let initialScale: number | null = null
 
   const snapshot = (): string =>
     JSON.stringify(canvas?.getObjects().map((o) => o.toObject(CUSTOM_PROPS)) ?? [])
@@ -156,7 +175,10 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     canUndo.value = history.canUndo
     canRedo.value = history.canRedo
     isEmpty.value = (canvas?.getObjects().length ?? 0) === 0
-    dirty.value = history.current !== initialSnapshot || typedChanges()
+    dirty.value =
+      history.current !== initialSnapshot ||
+      typedChanges() ||
+      micronsPerPixel.value !== initialScale
     hasSelection.value = (canvas?.getActiveObjects().length ?? 0) > 0
   }
 
@@ -388,7 +410,10 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
     for (const obj of objects) {
       const kind = kindOf(obj)
-      if (change === 'color') {
+      if (isMeasure(obj)) {
+        if (change === 'color') restyleMeasure(obj, { color })
+        else if (change === 'strokeWidth') restyleMeasure(obj, { strokeWidth: sceneStroke() })
+      } else if (change === 'color') {
         if (kind === 'text') obj.set('fill', color)
         else if (kind === 'highlighter') obj.set('stroke', withAlpha(color, HIGHLIGHTER_ALPHA))
         else if (kind === 'arrow') obj.set({ stroke: color, fill: color })
@@ -452,7 +477,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
   function onMouseDown(opt: TPointerEventInfo): void {
     const t = tool.value
-    if (isShapeTool(t)) {
+    if (isShapeTool(t) || t === 'measure') {
       draft = { from: opt.scenePoint, object: null }
     } else if (t === 'text') {
       // A click while typing only finishes the text – it must not spawn a new one.
@@ -468,15 +493,23 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   function onMouseMove(opt: TPointerEventInfo): void {
     const c = canvas!
     const t = tool.value
-    if (draft && isShapeTool(t)) {
+    if (draft && (isShapeTool(t) || t === 'measure')) {
       if (draft.object) c.remove(draft.object)
-      draft.object = createShape(
-        t,
-        draft.from,
-        opt.scenePoint,
-        { color: style.value.color, strokeWidth: sceneStroke(), filled: style.value.filled },
-        opt.e.shiftKey
-      )
+      draft.object =
+        t === 'measure'
+          ? createMeasure(
+              draft.from,
+              opt.e.shiftKey ? snapAngle(draft.from, opt.scenePoint) : opt.scenePoint,
+              { color: style.value.color, strokeWidth: sceneStroke(), unit },
+              micronsPerPixel.value
+            )
+          : createShape(
+              t,
+              draft.from,
+              opt.scenePoint,
+              { color: style.value.color, strokeWidth: sceneStroke(), filled: style.value.filled },
+              opt.e.shiftKey
+            )
       draft.object.selectable = false
       c.add(draft.object)
       c.requestRenderAll()
@@ -501,9 +534,11 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       const obj = draft.object
       draft = null
       if (obj) {
-        // Discard accidental clicks that produced (almost) nothing.
+        // Discard accidental clicks that produced (almost) nothing. (A measuring line has its
+        // label, so only its length tells.)
         const { width, height } = obj.getBoundingRect()
-        if (Math.max(width, height) < 4) c.remove(obj)
+        const size = isMeasure(obj) ? measuredLength(obj) : Math.max(width, height)
+        if (size < 4) c.remove(obj)
         else commit()
       }
     }
@@ -545,7 +580,26 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  async function load({ url, width, height, document }: LoadImageOptions): Promise<void> {
+  /**
+   * Objects read from JSON: measuring lines get their locks back (not serialized) and show their
+   * length with the current scale (it may have changed since).
+   */
+  function prepareLoaded(objects: FabricObject[]): FabricObject[] {
+    for (const obj of objects) {
+      if (!isMeasure(obj)) continue
+      lockMeasure(obj)
+      relabel(obj, micronsPerPixel.value)
+    }
+    return objects
+  }
+
+  async function load({
+    url,
+    width,
+    height,
+    document,
+    micronsPerPixel: scale
+  }: LoadImageOptions): Promise<void> {
     await dispose()
     const el = host.value
     if (!el) return
@@ -567,6 +621,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     canvas = c
     size = { width, height }
     unit = Math.max(width, height) / REFERENCE_SIZE
+    micronsPerPixel.value = initialScale = scale
     // Bind before adding saved objects so they get the same control style as new ones.
     bindEvents(c)
 
@@ -576,7 +631,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
     if (document?.objects.length) {
       const objects = await util.enlivenObjects<FabricObject>(document.objects)
-      c.add(...objects)
+      c.add(...prepareLoaded(objects))
     }
 
     initialSnapshot = snapshot()
@@ -595,7 +650,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       const objects = await util.enlivenObjects<FabricObject>(JSON.parse(state))
       c.discardActiveObject()
       c.remove(...c.getObjects())
-      c.add(...objects)
+      c.add(...prepareLoaded(objects))
       applyTool()
       syncState()
     })
@@ -619,7 +674,9 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     const c = canvas
     const point = c ? c.getScenePoint(e) : { x: 0, y: 0 }
     const onImage = point.x >= 0 && point.y >= 0 && point.x <= size.width && point.y <= size.height
-    if (!c) return { point, onImage, objects: [], fillable: false, filled: false }
+    if (!c) {
+      return { point, onImage, objects: [], fillable: false, filled: false, measurement: null }
+    }
 
     // Objects are found by their bounding box whatever the tool (drawing tools skip them).
     const { skipTargetFind, perPixelTargetFind } = c
@@ -647,8 +704,21 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       onImage,
       objects,
       fillable: fillable.length > 0,
-      filled: fillable.length > 0 && fillable.every((o) => o.fill !== 'transparent')
+      filled: fillable.length > 0 && fillable.every((o) => o.fill !== 'transparent'),
+      measurement: objects.length === 1 && isMeasure(objects[0]) ? objects[0] : null
     }
+  }
+
+  function setScale(value: number | null): void {
+    micronsPerPixel.value = value
+    const c = canvas
+    if (!c) return
+    for (const obj of c.getObjects()) if (isMeasure(obj)) relabel(obj, value)
+    c.requestRenderAll()
+    // No undo step of its own (undoing would only seem to do nothing – labels follow the scale);
+    // the current state just shows the new labels.
+    history.replace(snapshot())
+    syncState()
   }
 
   function addTextAt(point: XY): void {
@@ -722,12 +792,19 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   }
 
   function exportDocument(): EditorDocument {
-    return { version: 1, width: size.width, height: size.height, objects: JSON.parse(snapshot()) }
+    return {
+      version: 1,
+      width: size.width,
+      height: size.height,
+      objects: JSON.parse(snapshot()),
+      ...(micronsPerPixel.value ? { micronsPerPixel: micronsPerPixel.value } : {})
+    }
   }
 
   /** Marks the current state as saved. */
   function markSaved(): void {
     initialSnapshot = snapshot()
+    initialScale = micronsPerPixel.value
     syncState()
   }
 
@@ -766,6 +843,8 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     setViewZoom: (value: number) => setViewZoom(value),
     stepViewZoom,
     resetView,
+    micronsPerPixel,
+    setScale,
     undo,
     redo,
     deleteSelection,

@@ -7,12 +7,22 @@ import {
   MinusIcon,
   MousePointer2Icon,
   PencilIcon,
+  RulerIcon,
   SquareIcon,
   TypeIcon
 } from '@lucide/vue'
 
 export type Tool =
-  'select' | 'pen' | 'highlighter' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'eraser'
+  | 'select'
+  | 'pen'
+  | 'highlighter'
+  | 'line'
+  | 'arrow'
+  | 'rect'
+  | 'ellipse'
+  | 'text'
+  | 'eraser'
+  | 'measure'
 
 export type ShapeTool = Extract<Tool, 'line' | 'arrow' | 'rect' | 'ellipse'>
 
@@ -37,7 +47,8 @@ export const TOOL_GROUPS: ToolDefinition[][] = [
     { id: 'rect', label: 'Rechteck', icon: SquareIcon, shortcut: 'R' },
     { id: 'ellipse', label: 'Ellipse', icon: CircleIcon, shortcut: 'O' }
   ],
-  [{ id: 'text', label: 'Text', icon: TypeIcon, shortcut: 'T' }]
+  [{ id: 'text', label: 'Text', icon: TypeIcon, shortcut: 'T' }],
+  [{ id: 'measure', label: 'Messen', icon: RulerIcon, shortcut: 'D' }]
 ]
 
 export const TOOLS: ToolDefinition[] = TOOL_GROUPS.flat()
@@ -47,7 +58,7 @@ export const isShapeTool = (tool: Tool): tool is ShapeTool =>
 
 /** Tools that use the stroke-width setting. */
 export const usesStroke = (tool: Tool): boolean =>
-  tool === 'pen' || tool === 'highlighter' || isShapeTool(tool)
+  tool === 'pen' || tool === 'highlighter' || tool === 'measure' || isShapeTool(tool)
 
 /** Tools whose shapes can be filled. */
 export const usesFill = (tool: Tool): boolean => tool === 'rect' || tool === 'ellipse'

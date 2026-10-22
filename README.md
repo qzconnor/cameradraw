@@ -24,6 +24,8 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Einfrieren und zeichnen** – `Leertaste` oder die Foto-Taste am Mikroskop hält das Bild an.
   Stift, Textmarker, Linie, Pfeil, Rechteck, Ellipse, Text und Radierer, dazu Rückgängig und
   Wiederholen. Für Details lässt sich das Bild bis 8× vergrößern und verschieben.
+- **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
+  Lineal, siehe unten).
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
   füllen, löschen, alles auswählen.
 - **Bleibt bearbeitbar** – Neben jedem Bild liegen das Original und die Zeichnung als Ebenen. Wer
@@ -93,6 +95,7 @@ später in den Einstellungen ändern.
 | -------------------- | ---------------------------------------------------------------------- |
 | `V` `P` `M` `E`      | Auswählen, Stift, Textmarker, Radierer                                 |
 | `L` `A` `R` `O` `T`  | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
+| `D`                  | Messen – Strecke mit Längenangabe (`Shift` = gerade)                   |
 | Rechtsklick          | Text hier einfügen, Form füllen / Füllung entfernen, Löschen           |
 | `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
 | `Strg+Z` / `Strg+Y`  | Rückgängig / Wiederholen                                               |
@@ -112,6 +115,21 @@ später in den Einstellungen ändern.
 | `F2`                    | Bild oder Projekt umbenennen                                                         |
 | Rechtsklick / `…`       | Bearbeiten, Bild kopieren, Umbenennen, Verschieben nach …, Im Ordner zeigen, Löschen |
 | `Esc`                   | Ziehen abbrechen, Suche leeren, Galerie schließen                                    |
+
+## Messen
+
+Das Werkzeug **Messen** (`D`) zieht eine Linie mit Längenangabe. Ohne Maßstab steht dort die Länge
+in Pixeln. So legst du einen Maßstab fest:
+
+1. Ein Lineal unter das Mikroskop legen und das Bild anhalten.
+2. Eine Messlinie über eine bekannte Strecke ziehen – je länger, desto genauer, z. B. 5 mm.
+3. Rechtsklick auf die Linie → **Als Maßstab verwenden …** → die Länge eingeben.
+
+Ab dann zeigen alle Messlinien des Bildes µm bzw. mm. Mit „Für neue Aufnahmen merken“ bekommen auch
+die folgenden Bilder dieser Kamera den Maßstab; den Zoom der Kameraansicht rechnet CameraDraw dabei
+heraus. Der Maßstab stimmt nur, solange Vergrößerung und Abstand am Mikroskop gleich bleiben – nach
+einer Änderung einfach neu kalibrieren. Unten rechts im Editor steht, welcher Maßstab gilt; dort
+lässt er sich auch entfernen. Er wird mit dem Bild gespeichert (`micronsPerPixel` in der `*.json`).
 
 ## Speicherordner und Projekte
 

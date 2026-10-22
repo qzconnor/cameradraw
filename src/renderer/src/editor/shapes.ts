@@ -2,10 +2,11 @@ import { Ellipse, Path, Rect, type FabricObject, type XY } from 'fabric'
 import type { ShapeTool } from './tools'
 
 /** Marker stored on every drawn object so style changes know how to apply. */
-export type ObjectKind = 'pen' | 'highlighter' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text'
+export type ObjectKind =
+  'pen' | 'highlighter' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'measure'
 
-/** Custom properties that must survive serialization. */
-export const CUSTOM_PROPS = ['cdKind']
+/** Custom properties that must survive serialization (`cdLength`: see `editor/measure.ts`). */
+export const CUSTOM_PROPS = ['cdKind', 'cdLength']
 
 export interface ShapeStyle {
   color: string
@@ -24,7 +25,7 @@ const strokeProps = (style: ShapeStyle) =>
   }) as const
 
 /** Snaps the end point to 45° steps (Shift while drawing lines/arrows). */
-function snapAngle(from: XY, to: XY): XY {
+export function snapAngle(from: XY, to: XY): XY {
   const dx = to.x - from.x
   const dy = to.y - from.y
   const length = Math.hypot(dx, dy)
