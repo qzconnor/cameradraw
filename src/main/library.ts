@@ -240,7 +240,13 @@ export async function removeImage(root: string, path: string): Promise<void> {
   const file = resolveInLibrary(root, path)
   const layers = layerPaths(file)
   await shell.trashItem(file)
-  await Promise.all([rm(layers.json, { force: true }), rm(layers.base, { force: true })])
+  // The layers go to the trash as well, so an image restored from there is still editable.
+  // Should that fail, they are removed – left behind they would belong to no image.
+  await Promise.all(
+    [layers.json, layers.base]
+      .filter((layer) => existsSync(layer))
+      .map((layer) => shell.trashItem(layer).catch(() => rm(layer, { force: true })))
+  )
 }
 
 export async function moveImage(

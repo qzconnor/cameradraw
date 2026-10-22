@@ -215,7 +215,7 @@ const deleteTexts = computed(() => {
   }
   return {
     title: 'Bild löschen?',
-    description: `„${request?.item.name ?? ''}“ wird in den Papierkorb verschoben. Die zugehörigen Zeichnungs-Ebenen werden entfernt.`
+    description: `„${request?.item.name ?? ''}“ wird mit seinen Zeichnungs-Ebenen in den Papierkorb verschoben.`
   }
 })
 
