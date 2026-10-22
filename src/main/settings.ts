@@ -51,12 +51,26 @@ export function getAppState(): AppState {
   return { settings: current, saveDirAvailable: isWritableDir(current.saveDir) }
 }
 
-export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-  current = { ...current, ...patch }
+/**
+ * Writes run one after another: parallel writes would share the temp file, fail and could leave a
+ * broken settings file behind (which loads as the defaults – save folder and camera gone).
+ */
+let writeQueue: Promise<void> = Promise.resolve()
+
+/** Writes the settings as they are when the write starts, so the last write has the latest. */
+async function writeSettings(): Promise<void> {
   // Write atomically so a crash never leaves a half-written settings file behind.
   const file = settingsFile()
   const tmp = `${file}.tmp`
   await writeFile(tmp, JSON.stringify(current, null, 2), 'utf8')
   await rename(tmp, file)
+}
+
+export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+  current = { ...current, ...patch }
+  const write = writeQueue.then(writeSettings)
+  // A failed write must not block the ones after it.
+  writeQueue = write.catch(() => undefined)
+  await write
   return current
 }
