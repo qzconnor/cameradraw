@@ -6,7 +6,7 @@ import { toast } from 'vue-sonner'
 import type { GalleryItem } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import { Spinner } from '@/components/ui/spinner'
-import { useDrawingCanvas, type CanvasSpot } from '@/composables/useDrawingCanvas'
+import { MAX_VIEW_ZOOM, useDrawingCanvas, type CanvasSpot } from '@/composables/useDrawingCanvas'
 import { TOOLS } from '@/editor/tools'
 import { errorMessage } from '@/lib/format'
 import { encodingFor } from '@/lib/image'
@@ -19,6 +19,7 @@ import EditorActionBar from './EditorActionBar.vue'
 import EditorBreadcrumb from './EditorBreadcrumb.vue'
 import EditorCanvasMenu from './EditorCanvasMenu.vue'
 import EditorToolbar from './EditorToolbar.vue'
+import EditorZoomControl from './EditorZoomControl.vue'
 import SaveImageDialog from './SaveImageDialog.vue'
 
 const props = defineProps<{ session: EditorSession }>()
@@ -56,7 +57,10 @@ const {
   finishInteraction,
   exportImage,
   exportDocument,
-  markSaved
+  markSaved,
+  viewZoom,
+  stepViewZoom,
+  resetView
 } = useDrawingCanvas({ host, tool, style })
 
 onMounted(async () => {
@@ -226,6 +230,12 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
     e.preventDefault()
     if (hasSelection.value) finishInteraction()
     else editor.requestClose()
+  } else if (key === '+' || key === '=') {
+    stepViewZoom(1)
+  } else if (key === '-') {
+    stepViewZoom(-1)
+  } else if (key === '0') {
+    resetView()
   } else {
     const match = TOOLS.find((t) => t.shortcut.toLowerCase() === key)
     if (match) editor.tool = match.id
@@ -266,7 +276,16 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
         </div>
       </div>
 
-      <div class="flex shrink-0 justify-center px-4 pt-3 pb-4">
+      <!-- Zoom left, actions centred – like the controls of the camera view. -->
+      <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-3 pb-4">
+        <EditorZoomControl
+          class="justify-self-start"
+          :zoom="viewZoom"
+          :max="MAX_VIEW_ZOOM"
+          @zoom-in="stepViewZoom(1)"
+          @zoom-out="stepViewZoom(-1)"
+          @reset="resetView"
+        />
         <EditorActionBar
           :can-undo="canUndo"
           :can-redo="canRedo"
