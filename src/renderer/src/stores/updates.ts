@@ -4,6 +4,7 @@ import { useLocalStorage } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import type { ReleaseNote, UpdateState } from '@shared/types'
 import { errorMessage } from '@/lib/format'
+import { useEditorStore } from './editor'
 import { usePanelsStore } from './panels'
 
 export const useUpdatesStore = defineStore('updates', () => {
@@ -95,8 +96,12 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   const check = (): Promise<void> => window.api.updates.check()
   const download = (): Promise<void> => window.api.updates.download()
+  /**
+   * Asks first if a drawing is unsaved: the installer would close the app anyway, so the question
+   * has to come before it starts.
+   */
   function install(): void {
-    window.api.updates.install()
+    useEditorStore().guard(() => window.api.updates.install())
   }
 
   return {

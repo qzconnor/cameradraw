@@ -62,11 +62,25 @@ export const useEditorStore = defineStore('editor', () => {
     dirty.value = false
   }
 
+  const unsaved = computed(() => session.value !== null && dirty.value)
+
   /** Runs `action` right away, or after confirmation if there are unsaved changes. */
   function guard(action: () => void | Promise<void>): void {
-    if (session.value && dirty.value) pendingAction.value = action
+    if (unsaved.value) pendingAction.value = action
     else void action()
   }
+
+  // Closing the window (or quitting) with unsaved changes asks first too. Refusing the unload keeps
+  // the window open (the main process brings it to the front); after confirming it closes again.
+  let closeConfirmed = false
+  window.addEventListener('beforeunload', (e) => {
+    if (closeConfirmed || !unsaved.value) return
+    e.preventDefault()
+    guard(() => {
+      closeConfirmed = true
+      window.close()
+    })
+  })
 
   function confirmPending(): void {
     const action = pendingAction.value
