@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
@@ -7,17 +7,21 @@ import type { GalleryItem } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import { Spinner } from '@/components/ui/spinner'
 import { MAX_VIEW_ZOOM, useDrawingCanvas, type CanvasSpot } from '@/composables/useDrawingCanvas'
+import { formatScale, measuredLength } from '@/editor/measure'
 import { TOOLS } from '@/editor/tools'
 import { errorMessage } from '@/lib/format'
 import { encodingFor } from '@/lib/image'
 import { isOverlayOpen, isTypingTarget } from '@/lib/keyboard'
+import { useCameraStore } from '@/stores/camera'
 import { useEditorStore, type EditorSession } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
+import CalibrateDialog from './CalibrateDialog.vue'
 import EditorActionBar from './EditorActionBar.vue'
 import EditorBreadcrumb from './EditorBreadcrumb.vue'
 import EditorCanvasMenu from './EditorCanvasMenu.vue'
+import EditorScaleBadge from './EditorScaleBadge.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import EditorZoomControl from './EditorZoomControl.vue'
 import SaveImageDialog from './SaveImageDialog.vue'
@@ -28,6 +32,7 @@ const editor = useEditorStore()
 const gallery = useGalleryStore()
 const settings = useSettingsStore()
 const panels = usePanelsStore()
+const camera = useCameraStore()
 const { tool, style } = storeToRefs(editor)
 
 const host = ref<HTMLElement | null>(null)
@@ -60,7 +65,9 @@ const {
   markSaved,
   viewZoom,
   stepViewZoom,
-  resetView
+  resetView,
+  micronsPerPixel,
+  setScale
 } = useDrawingCanvas({ host, tool, style })
 
 onMounted(async () => {
@@ -69,7 +76,8 @@ onMounted(async () => {
       url: props.session.baseUrl,
       width: props.session.width,
       height: props.session.height,
-      document: props.session.document
+      document: props.session.document,
+      micronsPerPixel: props.session.micronsPerPixel
     })
   } catch (err) {
     toast.error('Bild konnte nicht geöffnet werden', { description: errorMessage(err) })
@@ -117,6 +125,55 @@ function deleteSpot(): void {
   if (spot.value) removeObjects(spot.value.objects)
 }
 
+// ── Measuring ─────────────────────────────────────────────────────────────────
+
+/** Length (image pixels) of the measuring line chosen to set the scale. */
+const calibrationPixels = ref(0)
+const calibrateOpen = ref(false)
+const cameraLabel = computed(() => camera.selectedLabel)
+
+function calibrateSpot(): void {
+  const measurement = spot.value?.measurement
+  if (!measurement) return
+  calibrationPixels.value = measuredLength(measurement)
+  calibrateOpen.value = true
+}
+
+/**
+ * Sets the scale of this picture; remembered for new pictures of the camera, as the scale of its
+ * frame without zoom (see `stores/editor.ts`).
+ */
+function calibrate(value: number, remember: boolean): void {
+  setScale(value)
+  const label = cameraLabel.value
+  if (remember && label) {
+    const { zoom, frameWidth } = props.session.capture
+    void settings.update({
+      cameraScales: {
+        ...settings.cameraScales,
+        [label]: { micronsPerPixel: value * zoom, frameWidth }
+      }
+    })
+  }
+  toast.success('Maßstab festgelegt', {
+    description:
+      remember && label ? `${formatScale(value)} – auch für neue Aufnahmen` : formatScale(value)
+  })
+}
+
+// Measuring without a scale gives pixels – say once how to get real lengths: when the tool is
+// picked, or right away if it is still picked from last time (once the picture is loaded).
+let scaleHinted = false
+watch([tool, ready], ([value, isReady]) => {
+  if (!isReady || value !== 'measure' || micronsPerPixel.value || scaleHinted) return
+  scaleHinted = true
+  toast('Noch kein Maßstab', {
+    description:
+      'Ziehe eine Messlinie über eine bekannte Strecke, z. B. 5 mm auf einem Lineal, und wähle per Rechtsklick „Als Maßstab verwenden …“.',
+    duration: 10_000
+  })
+})
+
 /**
  * "Speichern": an image from the gallery is saved in place right away and stays open, like in
  * other editors. A new capture needs a name and a project first.
@@ -153,7 +210,7 @@ async function save(
       target,
       image,
       base: props.session.baseBytes,
-      document: exportDocument(),
+      document: { ...exportDocument(), capture: props.session.capture },
       capturedAt: props.session.capturedAt
     })
     markSaved()
@@ -261,6 +318,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           :can-select-all="!isEmpty"
           @add-text="addTextHere"
           @toggle-fill="toggleFill"
+          @calibrate="calibrateSpot"
           @delete="deleteSpot"
           @select-all="selectAll"
         >
@@ -276,7 +334,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
         </div>
       </div>
 
-      <!-- Zoom left, actions centred – like the controls of the camera view. -->
+      <!-- Zoom left, actions centred, the scale for measuring right – like the camera view. -->
       <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-3 pb-4">
         <EditorZoomControl
           class="justify-self-start"
@@ -302,8 +360,19 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           @save="requestSave"
           @save-as="requestSaveAs"
         />
+        <!-- A wrapper for the alignment: the badge's root (the menu) renders no element. -->
+        <div v-if="micronsPerPixel" class="justify-self-end">
+          <EditorScaleBadge :microns-per-pixel="micronsPerPixel" @remove="setScale(null)" />
+        </div>
       </div>
     </div>
+
+    <CalibrateDialog
+      v-model:open="calibrateOpen"
+      :pixels="calibrationPixels"
+      :camera-label="cameraLabel"
+      @confirm="calibrate"
+    />
 
     <SaveImageDialog
       v-model:open="saveOpen"

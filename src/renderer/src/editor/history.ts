@@ -20,6 +20,11 @@ export class CanvasHistory {
     return true
   }
 
+  /** Updates the current state without adding a step (e.g. labels that follow a setting). */
+  replace(snapshot: string): void {
+    if (this.index >= 0) this.stack[this.index] = snapshot
+  }
+
   undo(): string | null {
     return this.canUndo ? this.stack[--this.index] : null
   }

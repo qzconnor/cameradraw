@@ -21,6 +21,8 @@ export interface AppSettings {
   disabledModules: string[]
   /** Camera label → module id or `none`. Cameras missing here are matched automatically. */
   cameraModules: Record<string, string>
+  /** Camera label → its last calibration, applied to new pictures. */
+  cameraScales: Record<string, CameraScale>
 }
 
 export interface AppState {
@@ -74,6 +76,27 @@ export interface EditorDocument {
   objects: Record<string, unknown>[]
   /** When the picture was taken (ms since epoch); added on saving, missing in older files. */
   capturedAt?: number
+  /** Scale of the picture for measuring, if known (calibrated). */
+  micronsPerPixel?: number
+  /** How the picture was taken – needed to carry a calibration over to other pictures. */
+  capture?: CaptureInfo
+}
+
+export interface CaptureInfo {
+  /** Zoom factor of the camera view (digital or the camera's own), 1 = none. */
+  zoom: number
+  /** Width of the camera frame in pixels. */
+  frameWidth: number
+}
+
+/**
+ * Calibration of a camera, remembered for new pictures: microns per pixel of a frame of
+ * `frameWidth` pixels without zoom. Only right as long as magnification and distance stay the
+ * same.
+ */
+export interface CameraScale {
+  micronsPerPixel: number
+  frameWidth: number
 }
 
 export interface SaveImageRequest {

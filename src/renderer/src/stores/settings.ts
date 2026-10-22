@@ -16,6 +16,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const stopCameraWhenHidden = computed(() => settings.value?.stopCameraWhenHidden ?? true)
   const disabledModules = computed(() => settings.value?.disabledModules ?? [])
   const cameraModules = computed(() => settings.value?.cameraModules ?? {})
+  const cameraScales = computed(() => settings.value?.cameraScales ?? {})
 
   function apply(state: AppState): void {
     settings.value = state.settings
@@ -49,6 +50,7 @@ export const useSettingsStore = defineStore('settings', () => {
     stopCameraWhenHidden,
     disabledModules,
     cameraModules,
+    cameraScales,
     load,
     update
   }

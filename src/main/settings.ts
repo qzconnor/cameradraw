@@ -13,7 +13,8 @@ const DEFAULTS: AppSettings = {
   preferCameraZoom: true,
   stopCameraWhenHidden: true,
   disabledModules: [],
-  cameraModules: {}
+  cameraModules: {},
+  cameraScales: {}
 }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')

@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
-import { IPC, type AppSettings, type SaveImageRequest } from '@shared/types'
+import { IPC, type AppSettings, type CameraScale, type SaveImageRequest } from '@shared/types'
 import { registerButtonIpc } from './buttons'
 import { listSystemCameras } from './cameras'
 import { registerControlsIpc } from './controls'
@@ -57,6 +57,21 @@ const isStringRecord = (v: unknown): v is Record<string, string> =>
   Object.keys(v).length <= 200 &&
   Object.values(v).every((s) => typeof s === 'string')
 
+const isPositive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0
+
+const isScaleRecord = (v: unknown): v is Record<string, CameraScale> =>
+  typeof v === 'object' &&
+  v !== null &&
+  !Array.isArray(v) &&
+  Object.keys(v).length <= 200 &&
+  Object.values(v).every(
+    (s) =>
+      typeof s === 'object' &&
+      s !== null &&
+      isPositive(s.micronsPerPixel) &&
+      isPositive(s.frameWidth)
+  )
+
 /** Only accept known keys with the right type from the renderer. */
 function sanitizePatch(patch: unknown): Partial<AppSettings> {
   const p = (patch ?? {}) as Record<string, unknown>
@@ -71,6 +86,14 @@ function sanitizePatch(patch: unknown): Partial<AppSettings> {
   if (typeof p.stopCameraWhenHidden === 'boolean') out.stopCameraWhenHidden = p.stopCameraWhenHidden
   if (isStringArray(p.disabledModules)) out.disabledModules = p.disabledModules.slice(0, 100)
   if (isStringRecord(p.cameraModules)) out.cameraModules = p.cameraModules
+  if (isScaleRecord(p.cameraScales)) {
+    out.cameraScales = Object.fromEntries(
+      Object.entries(p.cameraScales).map(([label, s]) => [
+        label,
+        { micronsPerPixel: s.micronsPerPixel, frameWidth: s.frameWidth }
+      ])
+    )
+  }
   return out
 }
 
