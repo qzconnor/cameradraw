@@ -75,13 +75,14 @@ später in den Einstellungen ändern.
 
 **Kamera**
 
-| Taste                | Aktion                                                          |
-| -------------------- | --------------------------------------------------------------- |
-| `Leertaste`          | Kamerabild anhalten und den Editor öffnen                       |
-| Foto-Taste am Gerät  | wie `Leertaste` (USB-Mikroskop, braucht den Hintergrunddienst)  |
-| `+` / `−` / `0`      | Zoom vergrößern / verkleinern / zurücksetzen (auch per Mausrad) |
-| Zoom-Tasten am Gerät | wie `+` / `−` (USB-Mikroskop, ohne Hintergrunddienst)           |
-| `G`                  | Galerie öffnen / schließen                                      |
+| Taste                | Aktion                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `Leertaste`          | Kamerabild anhalten und den Editor öffnen                                                |
+| Foto-Taste am Gerät  | wie `Leertaste`, auch bei offener Galerie (USB-Mikroskop, braucht den Hintergrunddienst) |
+| `+` / `−` / `0`      | Zoom vergrößern / verkleinern / zurücksetzen (auch per Mausrad)                          |
+| Zoom-Tasten am Gerät | wie `+` / `−` (USB-Mikroskop, ohne Hintergrunddienst)                                    |
+| `P`                  | Kamera pausieren / fortsetzen                                                            |
+| `G`                  | Galerie öffnen / schließen                                                               |
 
 **Editor**
 

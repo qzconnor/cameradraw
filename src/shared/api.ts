@@ -84,4 +84,8 @@ export interface CameraDrawApi {
     /** The update notification of the system was clicked. */
     onShow(callback: () => void): () => void
   }
+  windowState: {
+    /** The window was minimized (true) or restored (false). */
+    onMinimizedChange(callback: (minimized: boolean) => void): () => void
+  }
 }

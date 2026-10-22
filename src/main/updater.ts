@@ -113,15 +113,16 @@ interface GitHubRelease {
   prerelease: boolean
 }
 
-/** Published releases with their notes, newest first (cached for a few minutes). */
-export async function listReleases(): Promise<ReleaseNote[]> {
-  if (releasesCache && Date.now() - releasesCache.at < RELEASES_CACHE) return releasesCache.notes
+/** Releases from the REST API: all of them, with the date of publication. */
+async function releasesFromApi(): Promise<ReleaseNote[]> {
   const response = await net.fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, {
-    headers: { Accept: 'application/vnd.github.html+json', 'User-Agent': 'CameraDraw' }
+    headers: { Accept: 'application/vnd.github.html+json', 'User-Agent': 'CameraDraw' },
+    // Always ask GitHub (cheap with the ETag) instead of answering from the HTTP cache.
+    cache: 'no-cache'
   })
   if (!response.ok) throw new Error(`GitHub antwortet mit Status ${response.status}.`)
   const releases = (await response.json()) as GitHubRelease[]
-  const notes = releases
+  return releases
     .filter((r) => !r.draft && !r.prerelease)
     .map((r) => ({
       version: r.tag_name.replace(/^v/, ''),
@@ -129,6 +130,55 @@ export async function listReleases(): Promise<ReleaseNote[]> {
       html: r.body_html ?? '',
       url: r.html_url
     }))
-  releasesCache = { at: Date.now(), notes }
+}
+
+const XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" }
+
+/** `&lt;p&gt;` → `<p>` – in a single pass, so `&amp;lt;` correctly becomes `&lt;`. */
+const unescapeXml = (text: string): string =>
+  text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
+    if (entity[0] !== '#') return XML_ENTITIES[entity.toLowerCase()] ?? match
+    const hex = entity[1].toLowerCase() === 'x'
+    return String.fromCodePoint(parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10))
+  })
+
+/**
+ * Releases from the Atom feed of the releases page (the one electron-updater reads too): the
+ * latest 10, no rate limit. `updated` stands in for the date of publication.
+ */
+async function releasesFromFeed(): Promise<ReleaseNote[]> {
+  const response = await net.fetch(`https://github.com/${REPO}/releases.atom`, {
+    headers: { 'User-Agent': 'CameraDraw' },
+    cache: 'no-cache'
+  })
+  if (!response.ok) throw new Error(`GitHub antwortet mit Status ${response.status}.`)
+  const feed = await response.text()
+  return [...feed.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(([, entry]) => {
+    const text = (tag: string): string =>
+      unescapeXml(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`).exec(entry)?.[1] ?? '')
+    return {
+      // The id ends with the tag, e.g. `tag:github.com,2008:Repository/1428916197/v1.2.3`.
+      version: text('id').split('/').pop()!.replace(/^v/, ''),
+      date: text('updated'),
+      html: text('content'),
+      url: unescapeXml(/<link[^>]*href="([^"]*)"/.exec(entry)?.[1] ?? '')
+    }
+  })
+}
+
+/** Published releases with their notes, newest first (cached for a few minutes). */
+export async function listReleases(): Promise<ReleaseNote[]> {
+  if (releasesCache && Date.now() - releasesCache.at < RELEASES_CACHE) return releasesCache.notes
+  let notes: ReleaseNote[] = []
+  try {
+    notes = await releasesFromApi()
+  } catch {
+    // E.g. the API's hourly limit – the feed has none.
+  }
+  // Since v1.2.3 the API lists no release of this repository at all (an empty list, while the
+  // single releases, the tags and the feed are fine) – then the feed fills in.
+  if (!notes.length) notes = await releasesFromFeed()
+  // An empty answer is never kept, so the next look asks GitHub again.
+  if (notes.length) releasesCache = { at: Date.now(), notes }
   return notes
 }

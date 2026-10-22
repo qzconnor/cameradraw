@@ -11,7 +11,7 @@ const label = computed(() => (props.paused ? 'Kamera fortsetzen' : 'Kamera pausi
 
 <!-- A smaller sibling of the shutter button, in the same look. -->
 <template>
-  <HintTooltip :label="label" side="top">
+  <HintTooltip :label="label" :shortcut="['P']" side="top">
     <button
       type="button"
       :aria-label="label"

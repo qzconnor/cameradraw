@@ -13,8 +13,8 @@ export interface AppSettings {
   /** Use the camera's own zoom if it has one (otherwise / when off: digital zoom). */
   preferCameraZoom: boolean
   /**
-   * Switch the camera off (free for other apps) while its picture is not shown – paused or while
-   * editing – instead of keeping it running in the background.
+   * Switch the camera off (free for other apps) while its picture is not shown – paused, while
+   * editing or with the window minimized – instead of keeping it running in the background.
    */
   stopCameraWhenHidden: boolean
   /** Ids of device modules the user switched off. */
@@ -172,7 +172,8 @@ export const IPC = {
   updatesInstall: 'updates:install',
   updatesReleases: 'updates:releases',
   updatesChanged: 'updates:changed',
-  updatesShow: 'updates:show'
+  updatesShow: 'updates:show',
+  windowMinimized: 'window:minimized'
 } as const
 
 export const MEDIA_SCHEME = 'cdraw'

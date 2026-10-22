@@ -75,6 +75,14 @@ const api: CameraDrawApi = {
       ipcRenderer.on(IPC.updatesShow, listener)
       return () => ipcRenderer.removeListener(IPC.updatesShow, listener)
     }
+  },
+  windowState: {
+    onMinimizedChange: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, minimized: boolean): void =>
+        callback(minimized)
+      ipcRenderer.on(IPC.windowMinimized, listener)
+      return () => ipcRenderer.removeListener(IPC.windowMinimized, listener)
+    }
   }
 }
 

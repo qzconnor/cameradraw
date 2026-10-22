@@ -8,13 +8,15 @@ withDefaults(
     /** Keys shown next to the label, e.g. `['Strg', 'Z']`. */
     shortcut?: string[]
     side?: 'top' | 'right' | 'bottom' | 'left'
+    /** Shows nothing, e.g. while the trigger says it all already. */
+    disabled?: boolean
   }>(),
-  { side: 'bottom' }
+  { side: 'bottom', disabled: false }
 )
 </script>
 
 <template>
-  <Tooltip>
+  <Tooltip :disabled="disabled">
     <TooltipTrigger as-child>
       <slot />
     </TooltipTrigger>

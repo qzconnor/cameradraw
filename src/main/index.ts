@@ -1,12 +1,14 @@
 import { app, BrowserWindow, nativeTheme, session, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { IPC } from '@shared/types'
 import icon from '../../resources/icon.png?asset'
 import { getSettings, loadSettings } from './settings'
 import { handleMediaProtocol, registerMediaScheme } from './protocol'
 import { startButtonService } from './buttons'
 import { registerIpc, restartLibraryWatcher } from './ipc'
 import { startUpdater } from './updater'
+import { loadWindowState, trackWindowState } from './window-state'
 
 // Matches the `--sidebar` token of the dark theme so the native window controls blend in.
 const CHROME_COLOR = '#171717'
@@ -22,9 +24,12 @@ function bringToFront(win: BrowserWindow): void {
 }
 
 function createWindow(): void {
+  const saved = loadWindowState()
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
+    // Size and position of the last session (otherwise centred).
+    ...saved?.bounds,
     minWidth: 960,
     minHeight: 620,
     show: false,
@@ -44,7 +49,17 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow.show())
+  mainWindow.on('ready-to-show', () => {
+    if (saved?.maximized) mainWindow.maximize()
+    mainWindow.show()
+  })
+  trackWindowState(mainWindow)
+
+  // The camera may be switched off while the window is minimized (see `stopCameraWhenHidden`).
+  const sendMinimized = (minimized: boolean): void =>
+    mainWindow.webContents.send(IPC.windowMinimized, minimized)
+  mainWindow.on('minimize', () => sendMinimized(true))
+  mainWindow.on('restore', () => sendMinimized(false))
 
   // The renderer keeps the window open because a drawing is unsaved and asks in its own dialog –
   // make sure it is seen, e.g. when the window was closed from the taskbar while minimized.

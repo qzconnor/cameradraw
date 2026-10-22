@@ -38,7 +38,8 @@ watch(open, (isOpen) => {
   if (!isOpen) return
   if (updates.unseen) justUpdated.value = updates.state.current
   updates.markSeen()
-  if (!updates.releases || updates.releasesError) void updates.loadReleases()
+  // Every time: a list loaded earlier may be outdated (or empty) by now.
+  void updates.loadReleases()
 })
 
 const dateFormat = new Intl.DateTimeFormat('de-DE', {
@@ -114,6 +115,17 @@ const canCheck = computed(
                 >Sobald eine Version veröffentlicht ist, steht sie hier.</EmptyDescription
               >
             </EmptyHeader>
+            <!-- GitHub may answer with an empty list for a moment right after a release. -->
+            <EmptyContent>
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="updates.releasesLoading"
+                @click="updates.loadReleases()"
+              >
+                Erneut laden
+              </Button>
+            </EmptyContent>
           </Empty>
 
           <template v-else>
