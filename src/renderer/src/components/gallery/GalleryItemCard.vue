@@ -13,6 +13,7 @@ import {
   Trash2Icon
 } from '@lucide/vue'
 import type { GalleryItem } from '@shared/types'
+import HintTooltip from '@/components/common/HintTooltip.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -68,6 +69,13 @@ const emit = defineEmits<{
 const drag = useGalleryDrag()
 const loaded = ref(false)
 const dragged = computed(() => drag.isDragged(props.item.path))
+
+/** The name is cut off – then its tooltip shows it in full. */
+const nameTruncated = ref(false)
+function measureName(event: PointerEvent): void {
+  const el = event.currentTarget as HTMLElement
+  nameTruncated.value = el.scrollWidth > el.clientWidth
+}
 
 /** Where the image can go: out of its project ("Kein Projekt", null) or into another one. */
 const moveTargets = computed(() => [
@@ -129,7 +137,14 @@ const deleteAction: MenuAction = {
           <div
             class="absolute inset-x-0 bottom-0 bg-linear-to-t from-stage/90 to-transparent px-2.5 pt-6 pb-2 text-left"
           >
-            <p class="truncate text-xs font-medium text-stage-foreground">{{ item.name }}</p>
+            <HintTooltip :label="item.name" :disabled="!nameTruncated">
+              <p
+                class="truncate text-xs font-medium text-stage-foreground"
+                @pointerenter="measureName"
+              >
+                {{ item.name }}
+              </p>
+            </HintTooltip>
             <p
               class="flex items-center gap-1.5 text-[11px] whitespace-nowrap text-stage-foreground/70"
             >

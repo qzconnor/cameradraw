@@ -33,6 +33,7 @@ function focusPanel(event: Event): void {
          selects, menus and dialogs (all z-50) must stay above it. -->
     <SheetContent
       side="right"
+      data-side-panel
       class="z-40 top-14! right-3! bottom-3! h-auto! w-[26rem]! max-w-[calc(100vw-1.5rem)]! gap-0 overflow-hidden rounded-2xl border-0! bg-popover/65 shadow-2xl ring-1 ring-foreground/10 backdrop-blur-2xl backdrop-saturate-150"
       @open-auto-focus="focusPanel"
       @close-auto-focus.prevent

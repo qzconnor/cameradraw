@@ -16,7 +16,8 @@ export interface CameraDevice {
  * busy      – the chosen camera exists but cannot be opened (e.g. used by another app)
  * no-camera – no camera has ever been chosen and none is connected
  * denied    – camera permission was denied
- * off       – not shown (paused or editor open) and switched off by `stopCameraWhenHidden`
+ * off       – not shown (paused, editor open or window minimized) and switched off by
+ *             `stopCameraWhenHidden`
  */
 export type CameraStatus =
   'idle' | 'starting' | 'live' | 'waiting' | 'busy' | 'no-camera' | 'denied' | 'off'
@@ -63,6 +64,8 @@ export const useCameraStore = defineStore('camera', () => {
   const paused = ref(false)
   /** The live view is on screen – false while the editor is open. */
   const viewShown = ref(true)
+  /** The app window is minimized. */
+  const minimized = ref(false)
   /** Capture requests from outside the live view (e.g. a device's photo button). */
   const captureRequests = createEventHook<void>()
 
@@ -307,6 +310,7 @@ export const useCameraStore = defineStore('camera', () => {
     if (initialized) return
     initialized = true
     navigator.mediaDevices.addEventListener('devicechange', () => void sync())
+    window.api.windowState.onMinimizedChange((value) => (minimized.value = value))
 
     selectedId.value = settings.settings?.cameraId ?? null
     selectedLabel.value = settings.settings?.cameraLabel ?? null
@@ -343,11 +347,11 @@ export const useCameraStore = defineStore('camera', () => {
 
   /** The picture is not shown and `stopCameraWhenHidden` asks to switch the camera off meanwhile. */
   const switchedOff = computed(
-    () => (paused.value || !viewShown.value) && settings.stopCameraWhenHidden
+    () => (paused.value || !viewShown.value || minimized.value) && settings.stopCameraWhenHidden
   )
 
   // Switch the camera off when it gets hidden (or when the setting changes meanwhile), on again
-  // once it is shown – e.g. after resuming or closing the editor.
+  // once it is shown – e.g. after resuming, closing the editor or restoring the window.
   watch(switchedOff, (off) => {
     if (off) {
       startToken++ // drops a camera that is still being opened

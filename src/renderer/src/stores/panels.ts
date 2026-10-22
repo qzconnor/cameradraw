@@ -17,5 +17,9 @@ export const usePanelsStore = defineStore('panels', () => {
 
   const toggle = (name: PanelName): void => setOpen(name, !isOpen(name))
 
-  return { active, isOpen, setOpen, toggle }
+  function closeAll(): void {
+    active.value = null
+  }
+
+  return { active, isOpen, setOpen, toggle, closeAll }
 })

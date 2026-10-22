@@ -11,6 +11,7 @@ import { useVideoPicture } from '@/composables/useVideoPicture'
 import { captureFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import {
+  isBlockingOverlayOpen,
   isInteractiveTarget,
   isKeyboardNavigating,
   isOverlayOpen,
@@ -92,6 +93,8 @@ async function capture(): Promise<void> {
     const frame = await captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
     emit('captured')
     editor.openCapture(frame.bytes, frame.width, frame.height)
+    // A side panel (e.g. the gallery, open during a photo button press) would cover the editor.
+    panels.closeAll()
   } catch (err) {
     toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
   } finally {
@@ -122,10 +125,18 @@ useEventListener(
 )
 
 // Capture from elsewhere, e.g. a device's photo button: only in the live view and only while no
-// dialog or side panel is open (the user is busy with something else then).
+// dialog or menu is open (the user is busy with something else then). Side panels like the
+// gallery leave the camera visible, so the button works with them like the zoom buttons do.
 camera.onCaptureRequest(() => {
-  if (!props.active || panels.active || isOverlayOpen()) return
+  if (!props.active || isBlockingOverlayOpen()) return
   void capture()
+})
+
+// P pauses the camera and resumes it – shown and available like the pause button.
+useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  if (e.key.toLowerCase() !== 'p' || e.repeat || !props.active) return
+  if (e.ctrlKey || e.metaKey || e.altKey || isOverlayOpen() || isTypingTarget(e.target)) return
+  if (camera.status === 'live' || camera.paused) camera.setPaused(!camera.paused)
 })
 
 // Zoom keys: + / − / 0

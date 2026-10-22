@@ -82,13 +82,15 @@ export const useUpdatesStore = defineStore('updates', () => {
     seenVersion.value = state.value.current
   }
 
+  /** Loads the notes again – the main process keeps them for a few minutes, so this is cheap. */
   async function loadReleases(): Promise<void> {
     releasesLoading.value = true
-    releasesError.value = null
     try {
       releases.value = await window.api.updates.releases()
+      releasesError.value = null
     } catch (err) {
-      releasesError.value = errorMessage(err)
+      // Notes shown already stay; the error only matters without them.
+      if (!releases.value?.length) releasesError.value = errorMessage(err)
     } finally {
       releasesLoading.value = false
     }

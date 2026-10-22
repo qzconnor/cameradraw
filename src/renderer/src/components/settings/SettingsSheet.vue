@@ -156,9 +156,9 @@ async function openFolder(): Promise<void> {
               Kamera ausschalten, wenn sie nicht zu sehen ist
             </FieldLabel>
             <FieldDescription>
-              Beim Pausieren und Bearbeiten geht das Kameralicht aus und andere Apps können die
-              Kamera nutzen; danach dauert das Einschalten einen Moment. Sonst läuft sie im
-              Hintergrund weiter.
+              Beim Pausieren, Bearbeiten und Minimieren geht das Kameralicht aus und andere Apps
+              können die Kamera nutzen; danach dauert das Einschalten einen Moment. Sonst läuft sie
+              im Hintergrund weiter.
             </FieldDescription>
           </FieldContent>
           <Switch

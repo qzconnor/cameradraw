@@ -25,16 +25,24 @@ window.addEventListener('keydown', (e) => e.key === 'Tab' && (keyboardNavigation
 
 export const isKeyboardNavigating = (): boolean => keyboardNavigation
 
+const OVERLAYS = [
+  '[role="dialog"][data-state="open"]',
+  '[role="alertdialog"][data-state="open"]',
+  '[data-slot="select-content"]',
+  '[data-slot="popover-content"]',
+  '[data-slot="dropdown-menu-content"]',
+  '[data-slot="context-menu-content"]'
+].join(',')
+
 /** True while a dialog, menu or popover is open – global shortcuts must stay quiet then. */
 export function isOverlayOpen(): boolean {
-  return !!document.querySelector(
-    [
-      '[role="dialog"][data-state="open"]',
-      '[role="alertdialog"][data-state="open"]',
-      '[data-slot="select-content"]',
-      '[data-slot="popover-content"]',
-      '[data-slot="dropdown-menu-content"]',
-      '[data-slot="context-menu-content"]'
-    ].join(',')
-  )
+  return !!document.querySelector(OVERLAYS)
+}
+
+/**
+ * Like `isOverlayOpen`, but the side panels (gallery, settings, …) do not count: they leave the
+ * camera visible, so a device's buttons keep working.
+ */
+export function isBlockingOverlayOpen(): boolean {
+  return [...document.querySelectorAll(OVERLAYS)].some((el) => !el.matches('[data-side-panel]'))
 }
