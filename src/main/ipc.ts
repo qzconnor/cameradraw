@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { IPC, type AppSettings, type SaveImageRequest } from '@shared/types'
 import { registerButtonIpc } from './buttons'
 import { listSystemCameras } from './cameras'
@@ -12,6 +12,7 @@ import {
   listReleases
 } from './updater'
 import {
+  copyImageToClipboard,
   createProject,
   listLibrary,
   loadImage,
@@ -22,7 +23,8 @@ import {
   renameProject,
   reveal,
   saveImage,
-  watchLibrary
+  watchLibrary,
+  writeImageToClipboard
 } from './library'
 
 let stopWatching: (() => void) | undefined
@@ -117,6 +119,13 @@ export function registerIpc(): void {
   )
   ipcMain.handle(IPC.libraryReveal, (_e, path: string) => reveal(requireSaveDir(), path))
   ipcMain.handle(IPC.libraryOpenFolder, () => shell.openPath(requireSaveDir()))
+  ipcMain.handle(IPC.libraryCopyImage, (_e, path: string) =>
+    copyImageToClipboard(requireSaveDir(), path)
+  )
+  ipcMain.handle(IPC.clipboardWriteImage, (_e, png: unknown) => {
+    if (!(png instanceof Uint8Array)) throw new Error('Kein Bild zum Kopieren.')
+    return writeImageToClipboard(nativeImage.createFromBuffer(Buffer.from(png)))
+  })
   ipcMain.handle(IPC.libraryCreateProject, (_e, name: string) =>
     createProject(requireSaveDir(), name)
   )

@@ -19,7 +19,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   InputGroup,
@@ -38,6 +45,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import { useGalleryStore } from '@/stores/gallery'
 
 /** Asks for the file name and the project before an image is saved. */
@@ -47,7 +55,8 @@ const props = defineProps<{
   saving: boolean
 }>()
 const open = defineModel<boolean>('open', { required: true })
-const emit = defineEmits<{ save: [target: string] }>()
+/** `copy`: save the edited image as a new one next to the original. */
+const emit = defineEmits<{ save: [target: string, copy: boolean] }>()
 
 const gallery = useGalleryStore()
 const nameInput = useTemplateRef<InstanceType<typeof InputGroupInput>>('nameInput')
@@ -62,6 +71,8 @@ const stem = ref('')
 const ext = ref('.png')
 const choice = ref(NO_PROJECT)
 const newProject = ref('')
+/** Only for an image from the gallery: keep the original and save a new image. */
+const asCopy = ref(false)
 /** Hints about empty fields only show after trying to save. */
 const submitted = ref(false)
 
@@ -71,6 +82,7 @@ watch(
     if (!isOpen) return
     submitted.value = false
     newProject.value = ''
+    asCopy.value = false
     if (props.source) {
       const { project, name } = splitItemPath(props.source)
       ;({ stem: stem.value, ext: ext.value } = splitExtension(name))
@@ -101,14 +113,47 @@ const project = computed(() =>
 )
 const target = computed(() => itemPath(project.value, `${stem.value.trim()}${ext.value}`))
 /** An existing image gets a new name or project – the file is moved, not copied. */
-const relocating = computed(() => props.source !== null && props.source !== target.value)
+const relocating = computed(
+  () => props.source !== null && !asCopy.value && props.source !== target.value
+)
+
+/** `Bild Kopie`, `Bild Kopie 2`, … – the first name still free in the chosen project. */
+function freeCopyStem(base: string): string {
+  const taken = (candidate: string): boolean =>
+    gallery.items.some((i) => sameName(i.path, itemPath(project.value, `${candidate}${ext.value}`)))
+  let candidate = `${base} Kopie`
+  for (let n = 2; taken(candidate); n++) candidate = `${base} Kopie ${n}`
+  return candidate
+}
+
+/** Name suggested when switching to a copy – taken back if the copy is switched off again. */
+let suggestedStem: string | null = null
+
+// A copy cannot keep the original's name in the same place – suggest a free one.
+watch(asCopy, async (copy) => {
+  if (!props.source) return
+  const original = splitExtension(splitItemPath(props.source).name).stem
+  if (!copy) {
+    if (stem.value === suggestedStem) stem.value = original
+    return
+  }
+  if (!sameName(target.value, props.source)) return
+  stem.value = suggestedStem = freeCopyStem(original)
+  await nextTick()
+  const el = nameInput.value?.$el as HTMLInputElement | undefined
+  el?.focus()
+  el?.select()
+})
 
 const nameProblem = computed(() => {
   const name = stem.value.trim()
   if (!name) return submitted.value ? 'Bitte gib einen Dateinamen ein.' : null
   const invalid = nameError(name)
   if (invalid) return invalid
-  const taken = gallery.items.some((i) => i.path !== props.source && sameName(i.path, target.value))
+  // For a copy the original counts as taken as well.
+  const taken = gallery.items.some(
+    (i) => (asCopy.value || i.path !== props.source) && sameName(i.path, target.value)
+  )
   if (!taken) return null
   return project.value
     ? `In „${project.value}“ gibt es schon ein Bild mit diesem Namen.`
@@ -129,7 +174,7 @@ function submit(): void {
   submitted.value = true
   const incomplete = !stem.value.trim() || (choice.value === NEW_PROJECT && !project.value)
   if (props.saving || incomplete || nameProblem.value || projectProblem.value) return
-  emit('save', target.value)
+  emit('save', target.value, asCopy.value)
 }
 
 /** Focus the name with everything selected, so typing replaces the suggestion. */
@@ -146,7 +191,7 @@ function focusName(event: Event): void {
     <DialogContent class="sm:max-w-md" @open-auto-focus="focusName">
       <form class="contents" @submit.prevent="submit">
         <DialogHeader>
-          <DialogTitle>Bild speichern</DialogTitle>
+          <DialogTitle>{{ source ? 'Speichern unter' : 'Bild speichern' }}</DialogTitle>
           <DialogDescription>
             Gib dem Bild einen Namen und wähle, in welchem Projekt es liegen soll.
           </DialogDescription>
@@ -172,6 +217,18 @@ function focusName(event: Event): void {
             <FieldDescription v-else-if="relocating">
               Das Bild wird nicht kopiert: „{{ source }}“ wird umbenannt bzw. verschoben.
             </FieldDescription>
+            <FieldDescription v-else-if="asCopy">
+              „{{ source }}“ bleibt unverändert, die Kopie kommt als neues Bild dazu.
+            </FieldDescription>
+          </Field>
+
+          <Field v-if="source" orientation="horizontal">
+            <FieldContent>
+              <!-- Clicking the label toggles the switch. -->
+              <FieldLabel for="save-copy" class="cursor-pointer">Als Kopie speichern</FieldLabel>
+              <FieldDescription>Das Original bleibt erhalten.</FieldDescription>
+            </FieldContent>
+            <Switch id="save-copy" v-model="asCopy" class="self-center" />
           </Field>
 
           <Field>

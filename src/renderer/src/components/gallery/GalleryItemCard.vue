@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue'
 import {
+  CopyIcon,
   EllipsisIcon,
   FolderIcon,
   FolderInputIcon,
@@ -59,6 +60,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   open: []
+  copy: []
   rename: []
   reveal: []
   delete: []
@@ -94,6 +96,7 @@ interface MenuAction {
 
 const mainActions: MenuAction[] = [
   { label: 'Bearbeiten', icon: PencilIcon, run: () => emit('open') },
+  { label: 'Bild kopieren', icon: CopyIcon, run: () => emit('copy') },
   { label: 'Umbenennen', icon: TextCursorInputIcon, run: () => emit('rename'), shortcut: 'F2' },
   { label: 'Im Ordner zeigen', icon: FolderSearchIcon, run: () => emit('reveal') }
 ]
