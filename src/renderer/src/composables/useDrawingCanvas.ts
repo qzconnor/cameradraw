@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 import {
   ActiveSelection,
   Canvas,
@@ -17,12 +17,24 @@ import { CanvasHistory } from '@/editor/history'
 import { CUSTOM_PROPS, createShape, kindOf, tag } from '@/editor/shapes'
 import { isShapeTool, type DrawStyle, type Tool } from '@/editor/tools'
 import { canvasToBytes, withAlpha } from '@/lib/image'
+import {
+  isInteractiveTarget,
+  isKeyboardNavigating,
+  isOverlayOpen,
+  isTypingTarget
+} from '@/lib/keyboard'
 
 /** Style values are defined for a 1920px wide image and scaled to the actual image size. */
 const REFERENCE_SIZE = 1920
 const HIGHLIGHTER_ALPHA = 0.4
 const HIGHLIGHTER_WIDTH_FACTOR = 3
 const TEXT_FONT = '"Geist Variable", sans-serif'
+/** Zoom range on top of the fitted image (1 = whole image visible). */
+export const MAX_VIEW_ZOOM = 8
+/** One zoom step of the + / − keys and buttons – like in the camera view. */
+const VIEW_ZOOM_STEP = 0.5
+/** Zoom per wheel delta unit: one mouse wheel notch (100) zooms by about 16 %. */
+const WHEEL_ZOOM = 0.0015
 
 /** Selection handle look (rendered on the canvas, therefore plain colors). */
 const CONTROL_STYLE = {
@@ -74,7 +86,14 @@ export interface DrawingCanvas {
   isEmpty: Ref<boolean>
   /** True if the drawing differs from the last loaded/saved state (incl. text being typed). */
   dirty: Ref<boolean>
+  /** Zoom of the view, 1 = whole image (up to `MAX_VIEW_ZOOM`). */
+  viewZoom: Ref<number>
   load(options: LoadImageOptions): Promise<void>
+  setViewZoom(value: number): void
+  /** Zooms in (1) or out (−1) by one step, like the + / − keys. */
+  stepViewZoom(direction: 1 | -1): void
+  /** Shows the whole image again. */
+  resetView(): void
   undo(): void
   redo(): void
   deleteSelection(): void
@@ -122,6 +141,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const hasSelection = ref(false)
   const isEmpty = ref(true)
   const dirty = ref(false)
+  const viewZoom = ref(1)
 
   const snapshot = (): string =>
     JSON.stringify(canvas?.getObjects().map((o) => o.toObject(CUSTOM_PROPS)) ?? [])
@@ -149,21 +169,172 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     if (history.push(snapshot())) syncState()
   }
 
-  // ── Sizing ──────────────────────────────────────────────────────────────────
+  // ── Sizing, zoom and panning ────────────────────────────────────────────────
 
-  function fit(): void {
+  /** Scene point shown in the middle of the drawing area. */
+  let center = { x: 0, y: 0 }
+
+  /** Zoom at which the whole image fits into the host. */
+  const fitZoom = (el: HTMLElement): number =>
+    Math.min(el.clientWidth / size.width, el.clientHeight / size.height)
+
+  /** `value` within `min`…`max`; the middle if the range is empty. */
+  const clamp = (value: number, min: number, max: number): number =>
+    min > max ? (min + max) / 2 : Math.min(max, Math.max(min, value))
+
+  /**
+   * Sizes the canvas to exactly the visible part of the image (at most the host) and moves the
+   * view there – so the picture always covers it, with no empty margin while zoomed or panned.
+   */
+  function layout(): void {
     const el = host.value
     if (!canvas || !el || !size.width) return
-    zoom = Math.min(el.clientWidth / size.width, el.clientHeight / size.height)
-    canvas.setDimensions({
-      width: Math.max(1, Math.floor(size.width * zoom)),
-      height: Math.max(1, Math.floor(size.height * zoom))
-    })
-    canvas.setZoom(zoom)
+    zoom = fitZoom(el) * viewZoom.value
+    const width = Math.max(1, Math.min(el.clientWidth, Math.floor(size.width * zoom)))
+    const height = Math.max(1, Math.min(el.clientHeight, Math.floor(size.height * zoom)))
+    canvas.setDimensions({ width, height })
+    const halfWidth = width / zoom / 2
+    const halfHeight = height / zoom / 2
+    center = {
+      x: clamp(center.x, halfWidth, size.width - halfWidth),
+      y: clamp(center.y, halfHeight, size.height - halfHeight)
+    }
+    canvas.setViewportTransform([
+      zoom,
+      0,
+      0,
+      zoom,
+      width / 2 - center.x * zoom,
+      height / 2 - center.y * zoom
+    ])
     canvas.requestRenderAll()
   }
 
-  useResizeObserver(host, fit)
+  useResizeObserver(host, layout)
+
+  /**
+   * Zooms to `value` (1 = whole image). The point at `anchor` (host coordinates, e.g. the mouse
+   * pointer) stays where it is; without one the middle does.
+   */
+  function setViewZoom(value: number, anchor?: XY): void {
+    const el = host.value
+    if (!canvas || !el || !size.width) return
+    // The canvas is centred in the host, so the host's middle shows `center`.
+    const offset = anchor
+      ? { x: anchor.x - el.clientWidth / 2, y: anchor.y - el.clientHeight / 2 }
+      : { x: 0, y: 0 }
+    const fixed = { x: center.x + offset.x / zoom, y: center.y + offset.y / zoom }
+    viewZoom.value = Math.round(clamp(value, 1, MAX_VIEW_ZOOM) * 100) / 100
+    const next = fitZoom(el) * viewZoom.value
+    center = { x: fixed.x - offset.x / next, y: fixed.y - offset.y / next }
+    layout()
+  }
+
+  const stepViewZoom = (direction: 1 | -1): void =>
+    setViewZoom(viewZoom.value + direction * VIEW_ZOOM_STEP)
+
+  function resetView(): void {
+    viewZoom.value = 1
+    center = { x: size.width / 2, y: size.height / 2 }
+    layout()
+  }
+
+  /** Host coordinates of a mouse event. */
+  function hostPoint(e: MouseEvent): XY {
+    const rect = host.value!.getBoundingClientRect()
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  useEventListener(
+    host,
+    'wheel',
+    (e: WheelEvent) => {
+      if (!canvas || !e.deltaY) return
+      e.preventDefault()
+      setViewZoom(viewZoom.value * Math.exp(-e.deltaY * WHEEL_ZOOM), hostPoint(e))
+    },
+    { passive: false }
+  )
+
+  // Panning: drag with the middle mouse button, or with the left one while Space is held. Such a
+  // press never reaches fabric (capture phase), so nothing is drawn or selected meanwhile.
+  let spaceHeld = false
+  /** Last mouse position (client coordinates) while panning. */
+  let panFrom: XY | null = null
+
+  const showPanCursor = (): void => canvas?.setCursor(panFrom ? 'grabbing' : 'grab')
+
+  function endSpacePan(): void {
+    spaceHeld = false
+    if (!panFrom) applyTool()
+  }
+
+  useEventListener(
+    host,
+    'mousedown',
+    (e: MouseEvent) => {
+      if (!canvas || !(e.button === 1 || (e.button === 0 && spaceHeld))) return
+      e.preventDefault() // no auto scrolling on a middle click
+      e.stopPropagation()
+      panFrom = { x: e.clientX, y: e.clientY }
+      showPanCursor()
+    },
+    { capture: true }
+  )
+  // While panning (or ready to), fabric must not change the cursor on hover.
+  useEventListener(
+    host,
+    'mousemove',
+    (e: MouseEvent) => {
+      if (!spaceHeld && !panFrom) return
+      e.stopPropagation()
+      showPanCursor()
+    },
+    { capture: true }
+  )
+  // On the window, so dragging beyond the drawing area keeps panning.
+  useEventListener(
+    window,
+    'mousemove',
+    (e: MouseEvent) => {
+      if (!panFrom) return
+      center = {
+        x: center.x - (e.clientX - panFrom.x) / zoom,
+        y: center.y - (e.clientY - panFrom.y) / zoom
+      }
+      panFrom = { x: e.clientX, y: e.clientY }
+      layout()
+    },
+    { capture: true }
+  )
+  useEventListener(
+    window,
+    'mouseup',
+    () => {
+      if (!panFrom) return
+      panFrom = null
+      if (spaceHeld) showPanCursor()
+      else applyTool()
+    },
+    { capture: true }
+  )
+
+  useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+    if (e.code !== 'Space' || !canvas) return
+    if (isOverlayOpen() || isTypingTarget(e.target) || isEditingText()) return
+    // A control reached with Tab keeps Space (see the camera view).
+    if (isInteractiveTarget(e.target) && isKeyboardNavigating()) return
+    e.preventDefault()
+    if (spaceHeld) return
+    spaceHeld = true
+    showPanCursor()
+  })
+  useEventListener(window, 'keyup', (e: KeyboardEvent) => {
+    if (e.code !== 'Space' || !spaceHeld) return
+    e.preventDefault() // a focused button would be clicked otherwise
+    endSpacePan()
+  })
+  useEventListener(window, 'blur', () => spaceHeld && endSpacePan())
 
   // ── Tools ───────────────────────────────────────────────────────────────────
 
@@ -410,7 +581,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
     initialSnapshot = snapshot()
     history.reset(initialSnapshot)
-    fit()
+    resetView()
     applyTool()
     syncState()
     ready.value = true
@@ -539,7 +710,11 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     if (!c) throw new Error('Kein Bild geladen')
     finishInteraction()
     // The tiny epsilon prevents floating point errors from cutting off the last pixel row.
+    // The whole image, wherever the view is zoomed or panned to: it starts at the translation.
+    const [, , , , left, top] = c.viewportTransform
     const out = c.toCanvasElement(1 / zoom, {
+      left,
+      top,
       width: size.width * zoom + 1e-6,
       height: size.height * zoom + 1e-6
     })
@@ -586,7 +761,11 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     hasSelection,
     isEmpty,
     dirty,
+    viewZoom,
     load,
+    setViewZoom: (value: number) => setViewZoom(value),
+    stepViewZoom,
+    resetView,
     undo,
     redo,
     deleteSelection,

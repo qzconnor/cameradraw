@@ -23,7 +23,7 @@ die auch später noch Form für Form bearbeitbar bleiben.
 
 - **Einfrieren und zeichnen** – `Leertaste` oder die Foto-Taste am Mikroskop hält das Bild an.
   Stift, Textmarker, Linie, Pfeil, Rechteck, Ellipse, Text und Radierer, dazu Rückgängig und
-  Wiederholen.
+  Wiederholen. Für Details lässt sich das Bild bis 8× vergrößern und verschieben.
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
   füllen, löschen, alles auswählen.
 - **Bleibt bearbeitbar** – Neben jedem Bild liegen das Original und die Zeichnung als Ebenen. Wer
@@ -89,18 +89,20 @@ später in den Einstellungen ändern.
 
 **Editor**
 
-| Taste               | Aktion                                                                 |
-| ------------------- | ---------------------------------------------------------------------- |
-| `V` `P` `M` `E`     | Auswählen, Stift, Textmarker, Radierer                                 |
-| `L` `A` `R` `O` `T` | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
-| Rechtsklick         | Text hier einfügen, Form füllen / Füllung entfernen, Löschen           |
-| `Strg+A`            | Alles auswählen (beim Schreiben: den Text markieren)                   |
-| `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen                                               |
-| `Entf`              | Auswahl löschen                                                        |
-| `Strg+S`            | Speichern – neue Bilder mit Dateiname und Projekt, gespeicherte direkt |
-| `Strg+Shift+S`      | Speichern unter … (neuer Name, anderes Projekt oder als Kopie)         |
-| `Strg+Shift+C`      | Bild mit Zeichnung in die Zwischenablage kopieren                      |
-| `Esc`               | Auswahl aufheben, sonst zurück zur Kamera                              |
+| Taste                | Aktion                                                                 |
+| -------------------- | ---------------------------------------------------------------------- |
+| `V` `P` `M` `E`      | Auswählen, Stift, Textmarker, Radierer                                 |
+| `L` `A` `R` `O` `T`  | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
+| Rechtsklick          | Text hier einfügen, Form füllen / Füllung entfernen, Löschen           |
+| `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
+| `Strg+Z` / `Strg+Y`  | Rückgängig / Wiederholen                                               |
+| `Entf`               | Auswahl löschen                                                        |
+| `Strg+S`             | Speichern – neue Bilder mit Dateiname und Projekt, gespeicherte direkt |
+| `Strg+Shift+S`       | Speichern unter … (neuer Name, anderes Projekt oder als Kopie)         |
+| `Strg+Shift+C`       | Bild mit Zeichnung in die Zwischenablage kopieren                      |
+| Mausrad / `+` `−`    | Zoomen (Mausrad: an der Mausposition), `0` zeigt wieder das ganze Bild |
+| `Leertaste` + Ziehen | Ausschnitt verschieben (auch mit gedrückter mittlerer Maustaste)       |
+| `Esc`                | Auswahl aufheben, sonst zurück zur Kamera                              |
 
 **Galerie**
 
