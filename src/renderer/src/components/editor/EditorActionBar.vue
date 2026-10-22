@@ -142,11 +142,11 @@ defineEmits<{
             <ChevronDownIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" side="top" class="w-56">
+        <DropdownMenuContent align="end" side="top" class="w-max">
           <DropdownMenuItem @select="$emit('saveAs')">
             <SaveAllIcon />
             Speichern unter …
-            <DropdownMenuShortcut>Strg+Shift+S</DropdownMenuShortcut>
+            <DropdownMenuShortcut class="pl-6">Strg+Shift+S</DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
