@@ -15,6 +15,12 @@ const TITLEBAR_HEIGHT = 43
 
 registerMediaScheme()
 
+/** Brings a window to the front, also out of the taskbar. */
+function bringToFront(win: BrowserWindow): void {
+  if (win.isMinimized()) win.restore()
+  win.focus()
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1440,
@@ -42,10 +48,7 @@ function createWindow(): void {
 
   // The renderer keeps the window open because a drawing is unsaved and asks in its own dialog –
   // make sure it is seen, e.g. when the window was closed from the taskbar while minimized.
-  mainWindow.webContents.on('will-prevent-unload', () => {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  })
+  mainWindow.webContents.on('will-prevent-unload', () => bringToFront(mainWindow))
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -77,7 +80,7 @@ function setupPermissions(): void {
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media')
 }
 
-app.whenReady().then(() => {
+function start(): void {
   electronApp.setAppUserModelId('com.cameradraw.app')
   nativeTheme.themeSource = 'dark'
 
@@ -97,7 +100,20 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
-})
+}
+
+// The installed app runs once: a second start would find the camera busy and run its own updater
+// and folder watcher, so it quits and brings the open window to the front instead. Not during
+// development – the lock is per profile, and `npm run dev` shares it with the installed app.
+if (!app.isPackaged || app.requestSingleInstanceLock()) {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) bringToFront(win)
+  })
+  app.whenReady().then(start)
+} else {
+  app.quit()
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
