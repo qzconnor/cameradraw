@@ -130,7 +130,8 @@ async function save(target: string): Promise<void> {
       target,
       image,
       base: props.session.baseBytes,
-      document: exportDocument()
+      document: exportDocument(),
+      capturedAt: props.session.capturedAt
     })
     markSaved()
     saveOpen.value = false

@@ -14,8 +14,8 @@ export interface GallerySort {
 /** A project with what the gallery shows about it. */
 export interface ProjectSummary {
   name: string
-  /** Latest change: the folder itself or its newest image. */
-  mtime: number
+  /** When its newest picture was taken; for an empty project the folder's last change. */
+  date: number
   count: number
   /** Total size of its images. */
   size: number
@@ -45,10 +45,10 @@ export function summarizeProjects(
   const byName = new Map(projects.map((p) => [p.name, { ...p, images: [] as GalleryItem[] }]))
   for (const item of items) if (item.project) byName.get(item.project)?.images.push(item)
   return [...byName.values()].map(({ name, mtime, images }) => {
-    const newest = [...images].sort((a, b) => b.mtime - a.mtime)
+    const newest = [...images].sort((a, b) => b.capturedAt - a.capturedAt)
     return {
       name,
-      mtime: Math.max(mtime, newest[0]?.mtime ?? 0),
+      date: newest[0]?.capturedAt ?? mtime,
       count: images.length,
       size: images.reduce((sum, i) => sum + i.size, 0),
       covers: newest.slice(0, 3).map((i) => i.thumbUrl)
@@ -69,7 +69,7 @@ function periodStart(filter: DateFilter): number {
 
 interface Sortable {
   name: string
-  mtime: number
+  date: number
   size: number
 }
 
@@ -79,12 +79,16 @@ function compare(a: Sortable, b: Sortable, sort: GallerySort): number {
       ? collator.compare(a.name, b.name)
       : sort.key === 'size'
         ? a.size - b.size
-        : a.mtime - b.mtime
+        : a.date - b.date
   return (sort.direction === 'asc' ? diff : -diff) || collator.compare(a.name, b.name)
 }
 
 const sortable = (e: GalleryEntry): Sortable =>
-  e.kind === 'project' ? e.project : e.kind === 'image' ? e.item : { name: '', mtime: 0, size: 0 }
+  e.kind === 'project'
+    ? e.project
+    : e.kind === 'image'
+      ? { name: e.item.name, date: e.item.capturedAt, size: e.item.size }
+      : { name: '', date: 0, size: 0 }
 
 /** What the gallery shows for a view: its projects and images, filtered and sorted. */
 export function galleryEntries(
@@ -103,14 +107,14 @@ export function galleryEntries(
         : // Searching at the top level also finds images inside projects.
           i.project === null || query !== ''
     )
-    .filter((i) => i.mtime >= since && matches(i.name))
+    .filter((i) => i.capturedAt >= since && matches(i.name))
     .map((item) => ({ kind: 'image', key: `i:${item.path}`, item }))
 
   const folders: GalleryEntry[] =
     view.project !== null
       ? []
       : projects
-          .filter((p) => p.mtime >= since && matches(p.name))
+          .filter((p) => p.date >= since && matches(p.name))
           .map((project) => ({ kind: 'project', key: `p:${project.name}`, project }))
 
   const byView = (a: GalleryEntry, b: GalleryEntry): number =>

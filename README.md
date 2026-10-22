@@ -30,9 +30,9 @@ die auch später noch Form für Form bearbeitbar bleiben.
   ein Bild wieder öffnet, kann jede Form und jeden Text einzeln verschieben, ändern oder löschen.
 - **Projekte** – Beim Speichern fragt CameraDraw nach Dateiname und Projekt (oder „Kein Projekt“).
   Das zuletzt gewählte Projekt ist beim nächsten Bild schon ausgewählt.
-- **Galerie** – Suche über alle Projekte, Sortierung nach Datum, Name oder Größe, Filter nach
-  Zeitraum. Bilder lassen sich per Drag & Drop in Projekte ziehen, umbenennen (`F2`), verschieben
-  und in den Papierkorb legen.
+- **Galerie** – Suche über alle Projekte, Sortierung nach Aufnahmedatum, Name oder Größe, Filter
+  nach Zeitraum. Bilder lassen sich per Drag & Drop in Projekte ziehen, umbenennen (`F2`),
+  verschieben und in den Papierkorb legen.
 - **Kamera** – unterscheidet echte von virtuellen Kameras (OBS, DroidCam, …), verbindet sich nach
   dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital.
 - **Geräte-Module** – Gerätetypen bringen eigene Funktionen mit, z. B. Foto- und Zoom-Tasten des
@@ -126,6 +126,10 @@ Speicherordner/
 - Jedes Bild liegt als PNG im Ordner und lässt sich ganz normal weiterverwenden.
 - Im versteckten Unterordner `.cameradraw/` liegen pro Bild das Originalbild (`*.base.png`) und die
   Zeichnungs-Ebenen (`*.json`).
+- Das Datum in der Galerie ist das Aufnahmedatum. Es steht in der `*.json` (`capturedAt`) und
+  bleibt beim Bearbeiten, Umbenennen, Verschieben, Kopieren und Synchronisieren erhalten. Bilder
+  ohne gespeichertes Datum (ältere Versionen, Bilder von außerhalb) bekommen es aus dem
+  Standardnamen (`CameraDraw_2026-10-21_15-50-12`), sonst gilt das Änderungsdatum der Datei.
 - Umbenennen und Verschieben nimmt die Ebenen mit. Ist der Name im Zielprojekt schon vergeben,
   hängt CameraDraw eine Nummer an.
 - Löschen verschiebt Bilder und Projekte in den Papierkorb, Bilder zusammen mit ihren Ebenen. Wer

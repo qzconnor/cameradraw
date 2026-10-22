@@ -15,6 +15,8 @@ export interface EditorSession {
   width: number
   height: number
   document: EditorDocument | null
+  /** When the picture was taken: a fresh capture now, an image from the gallery keeps its date. */
+  capturedAt: number
 }
 
 /** Converts arbitrary image bytes to PNG (project base images are always PNG). */
@@ -100,7 +102,8 @@ export const useEditorStore = defineStore('editor', () => {
       baseBytes: bytes,
       width,
       height,
-      document: null
+      document: null,
+      capturedAt: Date.now()
     })
   }
 
@@ -114,7 +117,15 @@ export const useEditorStore = defineStore('editor', () => {
           loaded.baseMime === 'image/png' ? loaded.base : await toPng(loaded.base, loaded.baseMime)
         const baseUrl = bytesToObjectUrl(base, 'image/png')
         const { width, height } = await imageSize(baseUrl)
-        setSession({ path, baseUrl, baseBytes: base, width, height, document: loaded.document })
+        setSession({
+          path,
+          baseUrl,
+          baseBytes: base,
+          width,
+          height,
+          document: loaded.document,
+          capturedAt: loaded.capturedAt
+        })
       } finally {
         loading.value = false
       }
