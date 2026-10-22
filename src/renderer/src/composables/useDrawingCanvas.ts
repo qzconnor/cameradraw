@@ -72,7 +72,7 @@ export interface DrawingCanvas {
   canRedo: Ref<boolean>
   hasSelection: Ref<boolean>
   isEmpty: Ref<boolean>
-  /** True if the drawing differs from the last loaded/saved state. */
+  /** True if the drawing differs from the last loaded/saved state (incl. text being typed). */
   dirty: Ref<boolean>
   load(options: LoadImageOptions): Promise<void>
   undo(): void
@@ -111,6 +111,8 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   let erasing = false
   let erased = false
   let textWasEditing = false
+  /** Content of the text being typed when typing started (it is committed only on leaving it). */
+  let textBeforeEdit: string | null = null
   /** Tool to return to when a text added from the context menu is done. */
   let toolBeforeText: Tool | null = null
 
@@ -124,11 +126,17 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const snapshot = (): string =>
     JSON.stringify(canvas?.getObjects().map((o) => o.toObject(CUSTOM_PROPS)) ?? [])
 
+  /** Typed into the text being edited – not in the history yet, but already a change. */
+  function typedChanges(): boolean {
+    const active = canvas?.getActiveObject()
+    return active instanceof IText && active.isEditing && active.text !== textBeforeEdit
+  }
+
   function syncState(): void {
     canUndo.value = history.canUndo
     canRedo.value = history.canRedo
     isEmpty.value = (canvas?.getObjects().length ?? 0) === 0
-    dirty.value = history.current !== initialSnapshot
+    dirty.value = history.current !== initialSnapshot || typedChanges()
     hasSelection.value = (canvas?.getActiveObjects().length ?? 0) > 0
   }
 
@@ -347,7 +355,13 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       commit()
     })
     c.on('object:modified', commit)
+    c.on('text:editing:entered', ({ target }) => {
+      textBeforeEdit = target.text
+    })
+    // So closing or leaving the editor asks while a text is still being typed.
+    c.on('text:changed', syncState)
     c.on('text:editing:exited', ({ target }) => {
+      textBeforeEdit = null
       if (!target.text.trim()) c.remove(target)
       commit()
       if (toolBeforeText && tool.value === 'text') tool.value = toolBeforeText
@@ -548,6 +562,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     canvas = null
     draft = null
     erasing = false
+    textBeforeEdit = null
     if (c) await c.dispose()
     if (host.value) host.value.replaceChildren()
   }
