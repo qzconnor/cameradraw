@@ -48,3 +48,19 @@ export function captureStem(date = new Date()): string {
   const p = (n: number): string => String(n).padStart(2, '0')
   return `CameraDraw_${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}_${p(date.getHours())}-${p(date.getMinutes())}-${p(date.getSeconds())}`
 }
+
+/** The time (ms since epoch) in a name made by `captureStem`, or null if the name has none. */
+export function captureStampTime(name: string): number | null {
+  const match = /(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/.exec(name)
+  if (!match) return null
+  const [year, month, day, hours, minutes, seconds] = match.slice(1).map(Number)
+  const date = new Date(year, month - 1, day, hours, minutes, seconds)
+  // Date rolls impossible values over (month 13, 25 o'clock) – those are no time stamp.
+  const exact =
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    date.getHours() === hours &&
+    date.getMinutes() === minutes &&
+    date.getSeconds() === seconds
+  return exact ? date.getTime() : null
+}

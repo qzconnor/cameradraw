@@ -3,7 +3,7 @@ import { execFile } from 'child_process'
 import { existsSync, watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises'
 import { basename, dirname, extname, join } from 'path'
-import { itemPath, nameError, splitExtension, splitItemPath } from '@shared/names'
+import { captureStampTime, itemPath, nameError, splitExtension, splitItemPath } from '@shared/names'
 import {
   MEDIA_SCHEME,
   type EditorDocument,
@@ -71,10 +71,51 @@ const layerPaths = (file: string): { json: string; base: string } => {
   return { json: join(dir, `${stem}.json`), base: join(dir, `${stem}.base.png`) }
 }
 
+const isTime = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+
+/**
+ * Capture date of an image without one stored in its layers (older versions, or images from
+ * elsewhere): the time in its default file name, otherwise its last change.
+ */
+const unstoredCaptureTime = (name: string, mtimeMs: number): number =>
+  captureStampTime(name) ?? Math.round(mtimeMs)
+
+/** `capturedAt` of layer files by path – read again only when a file changed. */
+const storedCaptureTimes = new Map<string, { mtimeMs: number; capturedAt: number | null }>()
+
+async function storedCaptureTime(json: string, mtimeMs: number): Promise<number | null> {
+  const cached = storedCaptureTimes.get(json)
+  if (cached?.mtimeMs === mtimeMs) return cached.capturedAt
+  let capturedAt: number | null = null
+  try {
+    const document = JSON.parse(await readFile(json, 'utf8')) as Partial<EditorDocument>
+    if (isTime(document.capturedAt)) capturedAt = document.capturedAt
+  } catch {
+    // Unreadable layer data – the fallback date applies.
+  }
+  storedCaptureTimes.set(json, { mtimeMs, capturedAt })
+  return capturedAt
+}
+
+/** Writes the date shown so far into layer data of older versions, which have none. */
+async function keepCaptureTime(file: string): Promise<void> {
+  const { json } = layerPaths(file)
+  try {
+    const document = JSON.parse(await readFile(json, 'utf8')) as EditorDocument
+    if (isTime(document.capturedAt)) return
+    const capturedAt = unstoredCaptureTime(basename(file), (await stat(file)).mtimeMs)
+    await writeAtomic(json, JSON.stringify({ ...document, capturedAt }))
+  } catch {
+    // No or unreadable layer data – nothing to keep.
+  }
+}
+
 function toGalleryItem(
   project: string | null,
   name: string,
   mtime: number,
+  capturedAt: number,
   size: number,
   editable: boolean
 ): GalleryItem {
@@ -87,6 +128,7 @@ function toGalleryItem(
     url: `${MEDIA_SCHEME}://media/${encoded}?v=${mtime}`,
     thumbUrl: `${MEDIA_SCHEME}://thumb/${encoded}?v=${mtime}`,
     mtime,
+    capturedAt,
     size,
     editable
   }
@@ -101,9 +143,12 @@ async function listImages(root: string, project: string | null): Promise<Gallery
       .map(async (e) => {
         try {
           const file = join(dir, e.name)
-          const info = await stat(file)
-          const editable = existsSync(layerPaths(file).json)
-          return toGalleryItem(project, e.name, Math.round(info.mtimeMs), info.size, editable)
+          const { json } = layerPaths(file)
+          const [info, layers] = await Promise.all([stat(file), stat(json).catch(() => null)])
+          const stored = layers ? await storedCaptureTime(json, layers.mtimeMs) : null
+          const capturedAt = stored ?? unstoredCaptureTime(e.name, info.mtimeMs)
+          const mtime = Math.round(info.mtimeMs)
+          return toGalleryItem(project, e.name, mtime, capturedAt, info.size, layers !== null)
         } catch {
           return null // file vanished between readdir and stat
         }
@@ -186,6 +231,8 @@ async function relocate(root: string, from: string, to: string): Promise<void> {
     throw new Error('Es gibt dort schon ein Bild mit diesem Namen.')
   }
   await mkdir(dirname(dest), { recursive: true })
+  // The date may come from the old name – store it before the name changes.
+  if (basename(src) !== basename(dest)) await keepCaptureTime(src)
   await renameInUse(src, dest, 'Das Bild')
 
   const [oldLayers, newLayers] = [layerPaths(src), layerPaths(dest)]
@@ -210,30 +257,36 @@ export async function saveImage(root: string, req: SaveImageRequest): Promise<Ga
     else if (existsSync(file)) throw new Error('Es gibt dort schon ein Bild mit diesem Namen.')
   }
 
+  const capturedAt = isTime(req.capturedAt) ? req.capturedAt : Date.now()
   const layers = layerPaths(file)
   await ensureLayersDir(dirname(file))
   await writeAtomic(layers.base, req.base)
-  await writeAtomic(layers.json, JSON.stringify(req.document))
+  await writeAtomic(layers.json, JSON.stringify({ ...req.document, capturedAt }))
   await writeAtomic(file, req.image)
 
   const info = await stat(file)
   const { project, name } = splitItemPath(req.target)
-  return toGalleryItem(project, name, Math.round(info.mtimeMs), info.size, true)
+  return toGalleryItem(project, name, Math.round(info.mtimeMs), capturedAt, info.size, true)
 }
 
 export async function loadImage(root: string, path: string): Promise<LoadedImage> {
   const file = resolveInLibrary(root, path)
   const layers = layerPaths(file)
+  const unstored = async (): Promise<number> =>
+    unstoredCaptureTime(basename(file), (await stat(file)).mtimeMs)
 
   if (existsSync(layers.json) && existsSync(layers.base)) {
     try {
       const document = JSON.parse(await readFile(layers.json, 'utf8')) as EditorDocument
-      return { path, base: await readFile(layers.base), baseMime: 'image/png', document }
+      const capturedAt = isTime(document.capturedAt) ? document.capturedAt : await unstored()
+      const base = await readFile(layers.base)
+      return { path, base, baseMime: 'image/png', document, capturedAt }
     } catch {
       // Corrupt layer data – fall back to editing the flat image.
     }
   }
-  return { path, base: await readFile(file), baseMime: mimeFor(file), document: null }
+  const base = await readFile(file)
+  return { path, base, baseMime: mimeFor(file), document: null, capturedAt: await unstored() }
 }
 
 export async function removeImage(root: string, path: string): Promise<void> {

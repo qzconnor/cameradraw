@@ -133,7 +133,7 @@ const deleteAction: MenuAction = {
             <p
               class="flex items-center gap-1.5 text-[11px] whitespace-nowrap text-stage-foreground/70"
             >
-              {{ formatDateTime(item.mtime) }}
+              {{ formatDateTime(item.capturedAt) }}
               <LayersIcon v-if="item.editable" class="size-3" aria-label="Ebenen bearbeitbar" />
               <span
                 v-if="showProject && item.project"

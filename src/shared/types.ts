@@ -42,6 +42,12 @@ export interface GalleryItem {
   thumbUrl: string
   /** Last modification time (ms since epoch). */
   mtime: number
+  /**
+   * When the picture was taken (ms since epoch): stored with its layers, otherwise the time in its
+   * default file name, otherwise `mtime`. The gallery shows, sorts and filters by it, so editing,
+   * copying or syncing an image does not change its date.
+   */
+  capturedAt: number
   size: number
   /** True if layered drawing data exists, so shapes stay individually editable. */
   editable: boolean
@@ -66,6 +72,8 @@ export interface EditorDocument {
   width: number
   height: number
   objects: Record<string, unknown>[]
+  /** When the picture was taken (ms since epoch); added on saving, missing in older files. */
+  capturedAt?: number
 }
 
 export interface SaveImageRequest {
@@ -81,6 +89,8 @@ export interface SaveImageRequest {
   /** Untouched base image (camera frame), PNG. */
   base: Uint8Array
   document: EditorDocument
+  /** When the picture was taken – an edited image keeps the date it had. */
+  capturedAt: number
 }
 
 export interface LoadedImage {
@@ -90,6 +100,8 @@ export interface LoadedImage {
   baseMime: string
   /** Editable drawing layer, null if the file has no project data. */
   document: EditorDocument | null
+  /** When the picture was taken, see `GalleryItem.capturedAt`. */
+  capturedAt: number
 }
 
 /**
