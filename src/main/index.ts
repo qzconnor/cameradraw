@@ -40,6 +40,13 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
 
+  // The renderer keeps the window open because a drawing is unsaved and asks in its own dialog –
+  // make sure it is seen, e.g. when the window was closed from the taskbar while minimized.
+  mainWindow.webContents.on('will-prevent-unload', () => {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
