@@ -40,12 +40,18 @@ export interface CameraDrawApi {
     /** Shows an image or a project folder in the file explorer. */
     reveal(path: string): Promise<void>
     openFolder(): Promise<string>
+    /** Puts the image (as saved, with its drawing) on the clipboard. */
+    copyImage(path: string): Promise<void>
     createProject(name: string): Promise<void>
     renameProject(from: string, to: string): Promise<void>
     /** Moves a project folder with all its images to the trash. */
     removeProject(name: string): Promise<void>
     /** Subscribes to changes in the save folder; returns an unsubscribe function. */
     onChanged(callback: () => void): () => void
+  }
+  clipboard: {
+    /** Puts a PNG on the clipboard, e.g. to paste it into a document or a chat. */
+    writeImage(png: Uint8Array): Promise<void>
   }
   devices: {
     /** Cameras registered with the OS (Windows only, otherwise null). */

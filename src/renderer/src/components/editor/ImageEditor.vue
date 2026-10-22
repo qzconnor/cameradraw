@@ -3,6 +3,7 @@ import { onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
+import type { GalleryItem } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import { Spinner } from '@/components/ui/spinner'
 import { useDrawingCanvas, type CanvasSpot } from '@/composables/useDrawingCanvas'
@@ -112,21 +113,39 @@ function deleteSpot(): void {
   if (spot.value) removeObjects(spot.value.objects)
 }
 
+/**
+ * "Speichern": an image from the gallery is saved in place right away and stays open, like in
+ * other editors. A new capture needs a name and a project first.
+ */
 function requestSave(): void {
+  if (saving.value || !ready.value) return
+  if (props.session.path) void save(props.session.path, { stayOpen: true })
+  else requestSaveAs()
+}
+
+/** "Speichern unter …": name and project – for an image from the gallery also as a copy. */
+function requestSaveAs(): void {
   if (saving.value || !ready.value) return
   // Ends text editing, so the text being typed is part of the saved image.
   finishInteraction()
   saveOpen.value = true
 }
 
-async function save(target: string): Promise<void> {
+const placeOf = (item: GalleryItem): string =>
+  item.project ? `${item.project} / ${item.name}` : item.name
+
+async function save(
+  target: string,
+  { copy = false, stayOpen = false }: { copy?: boolean; stayOpen?: boolean } = {}
+): Promise<void> {
   if (saving.value) return
   saving.value = true
   try {
     const { mime, quality } = encodingFor(target)
     const image = await exportImage(mime, quality)
     const item = await gallery.save({
-      source: props.session.path,
+      // A copy is a new image – the original stays as it is.
+      source: copy ? null : props.session.path,
       target,
       image,
       base: props.session.baseBytes,
@@ -135,8 +154,12 @@ async function save(target: string): Promise<void> {
     })
     markSaved()
     saveOpen.value = false
-    toast.success('Bild gespeichert', {
-      description: item.project ? `${item.project} / ${item.name}` : item.name,
+    if (stayOpen) {
+      toast.success('Gespeichert', { description: placeOf(item) })
+      return
+    }
+    toast.success(copy ? 'Kopie gespeichert' : 'Bild gespeichert', {
+      description: placeOf(item),
       // The gallery is hidden behind a button – offer a shortcut to the saved image.
       action: {
         label: 'Galerie öffnen',
@@ -154,15 +177,32 @@ async function save(target: string): Promise<void> {
   }
 }
 
+/** Puts the picture with its drawing on the clipboard, e.g. for a document or a chat. */
+async function copyToClipboard(): Promise<void> {
+  if (!ready.value) return
+  try {
+    await window.api.clipboard.writeImage(await exportImage())
+    toast.success('Bild kopiert', { description: 'Mit Zeichnung – zum Einfügen bereit.' })
+  } catch (err) {
+    toast.error('Kopieren fehlgeschlagen', { description: errorMessage(err) })
+  }
+}
+
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (isOverlayOpen()) return
   const mod = e.ctrlKey || e.metaKey
   const key = e.key.toLowerCase()
 
-  // Saving also works while typing text.
+  // Saving and copying also work while typing text.
   if (mod && key === 's') {
     e.preventDefault()
-    requestSave()
+    if (e.shiftKey) requestSaveAs()
+    else requestSave()
+    return
+  }
+  if (mod && e.shiftKey && key === 'c') {
+    e.preventDefault()
+    void copyToClipboard()
     return
   }
   if (isTypingTarget(e.target) || isEditingText()) return
@@ -233,16 +273,24 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           :has-selection="hasSelection"
           :is-empty="isEmpty"
           :saving="saving"
+          :existing="session.path !== null"
           @cancel="editor.requestClose()"
           @undo="undo"
           @redo="redo"
           @delete="deleteSelection"
           @clear="clearAll"
+          @copy="copyToClipboard"
           @save="requestSave"
+          @save-as="requestSaveAs"
         />
       </div>
     </div>
 
-    <SaveImageDialog v-model:open="saveOpen" :source="session.path" :saving="saving" @save="save" />
+    <SaveImageDialog
+      v-model:open="saveOpen"
+      :source="session.path"
+      :saving="saving"
+      @save="(target, copy) => save(target, { copy })"
+    />
   </div>
 </template>

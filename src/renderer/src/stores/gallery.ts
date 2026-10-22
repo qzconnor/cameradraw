@@ -164,6 +164,7 @@ export const useGalleryStore = defineStore('gallery', () => {
 
   const reveal = (path: string): Promise<void> => window.api.library.reveal(path)
   const openFolder = (): Promise<string> => window.api.library.openFolder()
+  const copyImage = (path: string): Promise<void> => window.api.library.copyImage(path)
 
   return {
     items,
@@ -196,6 +197,7 @@ export const useGalleryStore = defineStore('gallery', () => {
     renameProject,
     removeProject,
     reveal,
-    openFolder
+    openFolder,
+    copyImage
   }
 })

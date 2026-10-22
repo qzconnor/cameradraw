@@ -29,7 +29,10 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Bleibt bearbeitbar** – Neben jedem Bild liegen das Original und die Zeichnung als Ebenen. Wer
   ein Bild wieder öffnet, kann jede Form und jeden Text einzeln verschieben, ändern oder löschen.
 - **Projekte** – Beim Speichern fragt CameraDraw nach Dateiname und Projekt (oder „Kein Projekt“).
-  Das zuletzt gewählte Projekt ist beim nächsten Bild schon ausgewählt.
+  Das zuletzt gewählte Projekt ist beim nächsten Bild schon ausgewählt. Ein gespeichertes Bild
+  speichert `Strg+S` direkt, „Speichern unter …“ legt es auf Wunsch als Kopie an.
+- **Weitergeben** – `Strg+Shift+C` im Editor oder „Bild kopieren“ in der Galerie legt das Bild mit
+  Zeichnung in die Zwischenablage, z. B. zum Einfügen in Word, Teams oder eine Mail.
 - **Galerie** – Suche über alle Projekte, Sortierung nach Aufnahmedatum, Name oder Größe, Filter
   nach Zeitraum. Bilder lassen sich per Drag & Drop in Projekte ziehen, umbenennen (`F2`),
   verschieben und in den Papierkorb legen.
@@ -94,17 +97,19 @@ später in den Einstellungen ändern.
 | `Strg+A`            | Alles auswählen (beim Schreiben: den Text markieren)                   |
 | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen                                               |
 | `Entf`              | Auswahl löschen                                                        |
-| `Strg+S`            | Speichern – mit Dateiname und Projekt                                  |
+| `Strg+S`            | Speichern – neue Bilder mit Dateiname und Projekt, gespeicherte direkt |
+| `Strg+Shift+S`      | Speichern unter … (neuer Name, anderes Projekt oder als Kopie)         |
+| `Strg+Shift+C`      | Bild mit Zeichnung in die Zwischenablage kopieren                      |
 | `Esc`               | Auswahl aufheben, sonst zurück zur Kamera                              |
 
 **Galerie**
 
-| Taste / Geste           | Aktion                                                                |
-| ----------------------- | --------------------------------------------------------------------- |
-| Bild auf Projekt ziehen | Bild in das Projekt verschieben (mit „Rückgängig“ im Hinweis)         |
-| `F2`                    | Bild oder Projekt umbenennen                                          |
-| Rechtsklick / `…`       | Bearbeiten, Umbenennen, Verschieben nach …, Im Ordner zeigen, Löschen |
-| `Esc`                   | Ziehen abbrechen, Suche leeren, Galerie schließen                     |
+| Taste / Geste           | Aktion                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| Bild auf Projekt ziehen | Bild in das Projekt verschieben (mit „Rückgängig“ im Hinweis)                        |
+| `F2`                    | Bild oder Projekt umbenennen                                                         |
+| Rechtsklick / `…`       | Bearbeiten, Bild kopieren, Umbenennen, Verschieben nach …, Im Ordner zeigen, Löschen |
+| `Esc`                   | Ziehen abbrechen, Suche leeren, Galerie schließen                                    |
 
 ## Speicherordner und Projekte
 

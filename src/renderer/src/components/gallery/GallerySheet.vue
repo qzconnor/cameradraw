@@ -55,6 +55,15 @@ function openImage(path: string): void {
   editor.openFromGallery(path)
 }
 
+async function copyImage(item: GalleryItem): Promise<void> {
+  try {
+    await gallery.copyImage(item.path)
+    toast.success('Bild kopiert', { description: `${item.name} – zum Einfügen bereit.` })
+  } catch (err) {
+    toast.error('Kopieren fehlgeschlagen', { description: errorMessage(err) })
+  }
+}
+
 // --- Moving ---------------------------------------------------------------------------------
 
 async function moveImage(
@@ -403,6 +412,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
                   :show-project="gallery.currentProject === null"
                   :projects="gallery.projectNames"
                   @open="openImage(entry.item.path)"
+                  @copy="copyImage(entry.item)"
                   @reveal="run(() => gallery.reveal(entry.item.path))"
                   @rename="askName({ mode: 'renameImage', item: entry.item })"
                   @delete="askDeleteImage(entry.item)"

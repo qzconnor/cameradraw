@@ -1,4 +1,4 @@
-import { shell } from 'electron'
+import { clipboard, ClipboardItem, nativeImage, shell, type NativeImage } from 'electron'
 import { execFile } from 'child_process'
 import { existsSync, watch, type FSWatcher } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises'
@@ -350,6 +350,18 @@ export async function removeProject(root: string, name: string): Promise<void> {
 
 export function reveal(root: string, path: string): void {
   shell.showItemInFolder(resolveInLibrary(root, path))
+}
+
+/** Puts an image on the clipboard, so it can be pasted into documents, mails or chats. */
+export async function writeImageToClipboard(image: NativeImage): Promise<void> {
+  if (image.isEmpty()) throw new Error('Das Bild konnte nicht gelesen werden.')
+  const png = new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' })
+  await clipboard.write([new ClipboardItem({ 'image/png': png })])
+}
+
+/** Copies an image of the library – JPEG and WebP files arrive as PNG as well. */
+export function copyImageToClipboard(root: string, path: string): Promise<void> {
+  return writeImageToClipboard(nativeImage.createFromPath(resolveInLibrary(root, path)))
 }
 
 /**

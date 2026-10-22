@@ -20,6 +20,7 @@ const api: CameraDrawApi = {
     rename: (path, name) => ipcRenderer.invoke(IPC.libraryRename, path, name),
     reveal: (path) => ipcRenderer.invoke(IPC.libraryReveal, path),
     openFolder: () => ipcRenderer.invoke(IPC.libraryOpenFolder),
+    copyImage: (path) => ipcRenderer.invoke(IPC.libraryCopyImage, path),
     createProject: (name) => ipcRenderer.invoke(IPC.libraryCreateProject, name),
     renameProject: (from, to) => ipcRenderer.invoke(IPC.libraryRenameProject, from, to),
     removeProject: (name) => ipcRenderer.invoke(IPC.libraryRemoveProject, name),
@@ -28,6 +29,9 @@ const api: CameraDrawApi = {
       ipcRenderer.on(IPC.libraryChanged, listener)
       return () => ipcRenderer.removeListener(IPC.libraryChanged, listener)
     }
+  },
+  clipboard: {
+    writeImage: (png) => ipcRenderer.invoke(IPC.clipboardWriteImage, png)
   },
   devices: {
     systemCameras: () => ipcRenderer.invoke(IPC.systemCameras)
