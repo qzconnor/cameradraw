@@ -4,6 +4,7 @@ import { toast } from 'vue-sonner'
 import { computed } from 'vue'
 import CameraSelect from '@/components/camera/CameraSelect.vue'
 import SidePanel from '@/components/common/SidePanel.vue'
+import McpSettings from '@/components/mcp/McpSettings.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -168,6 +169,10 @@ async function openFolder(): Promise<void> {
             @update:model-value="update({ stopCameraWhenHidden: $event })"
           />
         </Field>
+
+        <FieldSeparator />
+
+        <McpSettings />
       </FieldGroup>
     </ScrollArea>
 

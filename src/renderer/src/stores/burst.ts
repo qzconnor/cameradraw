@@ -75,8 +75,9 @@ export const useBurstStore = defineStore('burst', () => {
   /**
    * Saves a captured frame as a new image, editable later like any other. Name, project and scale
    * are those of the moment it was taken; the saving itself waits for the pictures before it.
+   * Rejects if it failed (after saying so in a toast).
    */
-  function save(frame: CapturedFrame, capture: CaptureInfo): Promise<void> {
+  function save(frame: CapturedFrame, capture: CaptureInfo): Promise<GalleryItem> {
     const capturedAt = Date.now()
     const target = freePath(project.value, new Date(capturedAt))
     const micronsPerPixel = editor.scaleOfCapture(capture) ?? undefined
@@ -101,13 +102,15 @@ export const useBurstStore = defineStore('burst', () => {
           capturedAt
         })
         announce(item)
+        return item
       } catch (err) {
         toast.error('Bild nicht gespeichert', { description: errorMessage(err) })
+        throw err
       } finally {
         pending.splice(pending.indexOf(target), 1)
       }
     })
-    queue = run
+    queue = run.catch(() => undefined)
     return run
   }
 

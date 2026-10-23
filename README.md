@@ -51,6 +51,9 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Generalplus-USB-Mikroskops.
 - **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
   installiert sie mit einem Neustart. Die Versionshinweise aller Versionen stehen im Updates-Panel.
+- **KI-Steuerung (MCP)** – Auf Wunsch bedienen KI-Assistenten wie Claude Code die laufende App über
+  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, zeichnen, messen, speichern – live im
+  Fenster zu sehen. Standardmäßig aus.
 
 <table>
   <tr>
@@ -142,6 +145,42 @@ die folgenden Bilder dieser Kamera den Maßstab; den Zoom der Kameraansicht rech
 heraus. Der Maßstab stimmt nur, solange Vergrößerung und Abstand am Mikroskop gleich bleiben – nach
 einer Änderung einfach neu kalibrieren. Unten rechts im Editor steht, welcher Maßstab gilt; dort
 lässt er sich auch entfernen. Er wird mit dem Bild gespeichert (`micronsPerPixel` in der `*.json`).
+
+## KI-Steuerung (MCP)
+
+CameraDraw bringt einen [MCP](https://modelcontextprotocol.io)-Server mit. Ist er an, kann ein
+KI-Assistent die laufende App bedienen – alles passiert sichtbar im Fenster, so als würde jemand
+klicken: Kamera wählen und pausieren, Bild anhalten oder direkt speichern, Bilder in der Galerie
+suchen, öffnen, umbenennen und verschieben, im Editor zeichnen, messen, ändern und speichern.
+
+**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Darunter stehen Status, Port und die
+Einrichtung für Claude Code, VS Code, Cursor und andere Clients zum Kopieren. Für Claude Code:
+
+```bash
+claude mcp add --transport http cameradraw http://127.0.0.1:3729/mcp
+```
+
+Solange der Server an ist, zeigt die Titelleiste ein Roboter-Symbol; ein grüner Punkt daran heißt,
+dass ein Assistent gerade etwas tut.
+
+| Bereich   | Tools                                                                                                                                                                                                                                                                  |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`                                                                                                                                                                                                             |
+| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                    |
+| Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                 |
+| Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_save`, `editor_copy_image`, `editor_close` |
+| Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                   |
+
+- Koordinaten im Editor sind Bildpixel; gezeichnete Objekte haben einen Index in der
+  Stapelreihenfolge (`editor_state`). Ungespeicherte Änderungen verwirft ein Tool nur mit
+  `discard: true`.
+- Der Server lauscht nur auf `127.0.0.1` (Standard-Port 3729, änderbar) und verlangt keine
+  Anmeldung – jedes Programm auf dem Rechner kann ihn nutzen, solange er an ist. Anfragen von
+  Webseiten (fremder `Origin`/`Host`) lehnt er ab.
+- Technik: Streamable HTTP mit dem offiziellen SDK (`@modelcontextprotocol/server`), auch für Clients
+  mit dem Protokoll von 2025. Der Server sitzt im Main-Prozess (`src/main/mcp/`) und schickt jede
+  Aktion per IPC an die Oberfläche (`src/renderer/src/mcp/`), die sie über dieselben Stores und
+  Komponenten ausführt wie ein Klick.
 
 ## Speicherordner und Projekte
 
@@ -255,18 +294,21 @@ src/
                      Speicherordner), protocol.ts (cdraw:// für Bilder/Thumbnails), cameras.ts
                      (Windows-Geräteverwaltung: echte vs. virtuelle Kameras), buttons.ts (Dienst),
                      controls.ts (Helligkeit lesen für Zoom-Tasten), updater.ts (Updates und
-                     Versionshinweise von GitHub), ipc.ts
+                     Versionshinweise von GitHub), mcp/ (MCP-Server: Tools, Eingaben, Brücke
+                     zur Oberfläche), ipc.ts
   preload/           window.api (contextBridge, sandboxed)
   renderer/src/
     stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom), gallery (Projekte,
                      Suche, Sortierung), editor, burst (Serienaufnahme), updates, panels,
-                     hardware, modules
+                     hardware, modules, mcp
     composables/     useDrawingCanvas (fabric.js-Canvas, Werkzeuge, Undo/Redo, Export),
                      useGalleryDrag (Drag & Drop in der Galerie)
     editor/          Werkzeug-Definitionen, Formen, History
     lib/             gallery.ts (Filtern und Sortieren), Bild- und Kamera-Hilfen
     modules/         Geräte-Module – eine Datei pro Gerätetyp, Liste in index.ts
-    components/      camera/, editor/, gallery/, settings/, modules/, updates/, layout/,
+    mcp/             Aktionen der KI-Steuerung (actions.ts) und was Kamera und Editor dafür
+                     anbieten (remote.ts)
+    components/      camera/, editor/, gallery/, settings/, modules/, updates/, mcp/, layout/,
                      common/, ui/ (shadcn-vue)
 service/             Windows-Dienst „CameraDraw Buttons“ (C#, NativeAOT) für Kamera-Foto-Tasten
 scripts/             build-service.mjs

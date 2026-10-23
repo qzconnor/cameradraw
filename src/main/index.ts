@@ -7,6 +7,7 @@ import { getSettings, loadSettings } from './settings'
 import { handleMediaProtocol, registerMediaScheme } from './protocol'
 import { startButtonService } from './buttons'
 import { registerIpc, restartLibraryWatcher } from './ipc'
+import { applyMcpSettings } from './mcp/server'
 import { startUpdater } from './updater'
 import { loadWindowState, trackWindowState } from './window-state'
 
@@ -116,6 +117,8 @@ function start(): void {
 
   createWindow()
   startUpdater()
+  // Only if switched on in the settings.
+  void applyMcpSettings()
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

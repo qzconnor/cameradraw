@@ -23,6 +23,10 @@ export interface AppSettings {
   cameraModules: Record<string, string>
   /** Camera label → its last calibration, applied to new pictures. */
   cameraScales: Record<string, CameraScale>
+  /** Let AI assistants control the app through the MCP server (see `shared/mcp.ts`). */
+  mcpEnabled: boolean
+  /** Port of the MCP server on 127.0.0.1. */
+  mcpPort: number
 }
 
 export interface AppState {
@@ -182,6 +186,7 @@ export const IPC = {
   libraryCopyImage: 'library:copy-image',
   libraryChanged: 'library:changed',
   clipboardWriteImage: 'clipboard:write-image',
+  clipboardWriteText: 'clipboard:write-text',
   systemCameras: 'devices:system-cameras',
   buttonsStatus: 'buttons:status',
   buttonsWatch: 'buttons:watch',
@@ -198,7 +203,11 @@ export const IPC = {
   updatesReleases: 'updates:releases',
   updatesChanged: 'updates:changed',
   updatesShow: 'updates:show',
-  windowMinimized: 'window:minimized'
+  windowMinimized: 'window:minimized',
+  mcpStatus: 'mcp:status',
+  mcpStatusChanged: 'mcp:status-changed',
+  mcpRequest: 'mcp:request',
+  mcpResponse: 'mcp:response'
 } as const
 
 export const MEDIA_SCHEME = 'cdraw'

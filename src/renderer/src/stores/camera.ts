@@ -380,6 +380,7 @@ export const useCameraStore = defineStore('camera', () => {
     resolution,
     refreshing,
     paused,
+    minimized,
     zoom,
     zoomMode,
     hasCameraZoom,

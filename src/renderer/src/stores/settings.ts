@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { DEFAULT_MCP_PORT } from '@shared/mcp'
 import type { AppSettings, AppState } from '@shared/types'
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -17,6 +18,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const disabledModules = computed(() => settings.value?.disabledModules ?? [])
   const cameraModules = computed(() => settings.value?.cameraModules ?? {})
   const cameraScales = computed(() => settings.value?.cameraScales ?? {})
+  const mcpEnabled = computed(() => settings.value?.mcpEnabled ?? false)
+  const mcpPort = computed(() => settings.value?.mcpPort ?? DEFAULT_MCP_PORT)
 
   function apply(state: AppState): void {
     settings.value = state.settings
@@ -51,6 +54,8 @@ export const useSettingsStore = defineStore('settings', () => {
     disabledModules,
     cameraModules,
     cameraScales,
+    mcpEnabled,
+    mcpPort,
     load,
     update
   }
