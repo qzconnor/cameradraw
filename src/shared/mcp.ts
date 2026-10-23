@@ -149,6 +149,10 @@ export interface RemoteActionArgs {
   }
   editorSave: { name?: string; project?: string | null; asCopy?: boolean; close?: boolean }
   editorCopyImage: Record<string, never>
+  editorRotate: { degrees: 90 | 180 | 270 | -90 }
+  editorPerspective: { corners: RemotePoint[]; width?: number; height?: number }
+  editorExtend: { top?: number; right?: number; bottom?: number; left?: number; color?: string }
+  editorResetImage: Record<string, never>
   editorClose: { discard?: boolean }
   updateSettings: RemoteSettings
 }

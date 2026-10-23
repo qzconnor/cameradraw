@@ -3,10 +3,11 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import type { GalleryItem } from '@shared/types'
+import type { GalleryItem, ImageAdjustment, ImagePoint } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import { Spinner } from '@/components/ui/spinner'
 import { MAX_VIEW_ZOOM, useDrawingCanvas, type CanvasSpot } from '@/composables/useDrawingCanvas'
+import { perspectiveFor } from '@/editor/adjust'
 import { formatScale, measuredLength } from '@/editor/measure'
 import { TOOLS } from '@/editor/tools'
 import { errorMessage } from '@/lib/format'
@@ -19,12 +20,16 @@ import { useGalleryStore } from '@/stores/gallery'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
 import CalibrateDialog from './CalibrateDialog.vue'
+import CropActionBar from './CropActionBar.vue'
 import EditorActionBar from './EditorActionBar.vue'
 import EditorBreadcrumb from './EditorBreadcrumb.vue'
 import EditorCanvasMenu from './EditorCanvasMenu.vue'
+import EditorImageMenu from './EditorImageMenu.vue'
 import EditorScaleBadge from './EditorScaleBadge.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import EditorZoomControl from './EditorZoomControl.vue'
+import ExtendCanvasDialog from './ExtendCanvasDialog.vue'
+import PerspectiveCropOverlay from './PerspectiveCropOverlay.vue'
 import SaveImageDialog from './SaveImageDialog.vue'
 
 const props = defineProps<{ session: EditorSession }>()
@@ -77,15 +82,22 @@ const {
   stepViewZoom,
   resetView,
   micronsPerPixel,
-  setScale
+  setScale,
+  imageSize,
+  previewUrl,
+  adjustmentCount,
+  viewVersion,
+  adjustImage,
+  resetImage,
+  setLocked,
+  sceneToClient,
+  clientToScene
 } = canvas
 
 onMounted(async () => {
   try {
     await load({
       url: props.session.baseUrl,
-      width: props.session.width,
-      height: props.session.height,
       document: props.session.document,
       micronsPerPixel: props.session.micronsPerPixel
     })
@@ -118,6 +130,12 @@ watch(
 const spot = shallowRef<CanvasSpot | null>(null)
 
 function onContextMenu(e: MouseEvent): void {
+  // While placing crop corners there is nothing to do with shapes.
+  if (cropCorners.value) {
+    e.preventDefault()
+    e.stopPropagation()
+    return
+  }
   spot.value = ready.value ? inspectAt(e) : null
 }
 
@@ -305,18 +323,86 @@ async function copyToClipboard(): Promise<void> {
   }
 }
 
+// ── Changing the picture: turn, straighten, add space ─────────────────────────
+
+/** Corners of a perspective crop being placed (image pixels), null otherwise. */
+const cropCorners = ref<ImagePoint[] | null>(null)
+const extendOpen = ref(false)
+/** Where the corners start: a bit inside the picture, so all four can be grabbed. */
+const CROP_INSET = 0.1
+
+const cropResult = computed(() => {
+  const adjustment = cropCorners.value && perspectiveFor(cropCorners.value)
+  return adjustment ? { width: adjustment.width, height: adjustment.height } : null
+})
+
+async function changePicture(adjustment: ImageAdjustment): Promise<void> {
+  try {
+    await adjustImage(adjustment)
+  } catch (err) {
+    toast.error('Bild konnte nicht geändert werden', { description: errorMessage(err) })
+  }
+}
+
+async function resetPicture(): Promise<void> {
+  try {
+    await resetImage()
+  } catch (err) {
+    toast.error('Original konnte nicht wiederhergestellt werden', {
+      description: errorMessage(err)
+    })
+  }
+}
+
+function startCrop(): void {
+  if (!ready.value || cropCorners.value) return
+  finishInteraction()
+  const { width, height } = imageSize.value
+  const [left, right] = [width * CROP_INSET, width * (1 - CROP_INSET)]
+  const [top, bottom] = [height * CROP_INSET, height * (1 - CROP_INSET)]
+  cropCorners.value = [
+    { x: left, y: top },
+    { x: right, y: top },
+    { x: right, y: bottom },
+    { x: left, y: bottom }
+  ]
+  setLocked(true)
+}
+
+function stopCropping(): void {
+  if (!cropCorners.value) return
+  cropCorners.value = null
+  setLocked(false)
+}
+
+function applyCrop(): void {
+  const adjustment = cropCorners.value && perspectiveFor(cropCorners.value)
+  if (!adjustment) return
+  stopCropping()
+  void changePicture(adjustment)
+}
+
 provideRemote('editor', {
   baseUrl: props.session.baseUrl,
   canvas,
   save: saveTo,
   copyImage,
-  calibrate
+  calibrate,
+  stopCropping
 })
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (isOverlayOpen()) return
   const mod = e.ctrlKey || e.metaKey
   const key = e.key.toLowerCase()
+
+  // Placing crop corners: Enter crops, Escape stops – nothing else may draw or move shapes.
+  if (cropCorners.value) {
+    if (key === 'enter' || key === 'escape') e.preventDefault()
+    if (key === 'enter') applyCrop()
+    else if (key === 'escape') stopCropping()
+    return
+  }
 
   // Saving and copying also work while typing text.
   if (mod && key === 's') {
@@ -376,6 +462,8 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
     stepViewZoom(-1)
   } else if (key === '0') {
     resetView()
+  } else if (key === 'c') {
+    startCrop()
   } else {
     const match = TOOLS.find((t) => t.shortcut.toLowerCase() === key)
     if (match) editor.tool = match.id
@@ -386,13 +474,31 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 <template>
   <div class="absolute inset-0">
     <!-- Colours of the frozen image glow into the space around it, aligned with the canvas area. -->
-    <AmbientLight v-if="settings.ambientLight" :image-url="session.baseUrl" :frame="host" />
+    <AmbientLight
+      v-if="settings.ambientLight"
+      :image-url="previewUrl ?? session.baseUrl"
+      :frame="host"
+    />
 
     <div class="relative flex size-full flex-col">
       <!-- Breadcrumb on the left gets all the space the right-aligned toolbar leaves. -->
       <div class="flex shrink-0 items-center gap-3 px-4 pt-4 pb-3">
         <EditorBreadcrumb :path="session.path" />
-        <EditorToolbar class="shrink-0" />
+        <EditorImageMenu
+          class="shrink-0"
+          :adjusted="adjustmentCount > 0"
+          :disabled="!ready || !!cropCorners"
+          @rotate="(turns) => changePicture({ type: 'rotate', turns })"
+          @crop="startCrop"
+          @extend="extendOpen = true"
+          @reset="resetPicture"
+        />
+        <!-- Out of the way while crop corners are placed. -->
+        <EditorToolbar
+          class="shrink-0"
+          :class="cropCorners && 'pointer-events-none opacity-40'"
+          :inert="!!cropCorners"
+        />
       </div>
 
       <div class="relative min-h-0 flex-1 px-4">
@@ -417,6 +523,15 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             @contextmenu.capture="onContextMenu"
           />
         </EditorCanvasMenu>
+        <PerspectiveCropOverlay
+          v-if="cropCorners"
+          v-model:corners="cropCorners"
+          :image-size="imageSize"
+          :version="viewVersion"
+          :to-client="sceneToClient"
+          :to-scene="clientToScene"
+          :picture="canvas.picture()"
+        />
         <div v-if="!ready" class="absolute inset-0 grid place-items-center">
           <Spinner class="size-6" />
         </div>
@@ -432,7 +547,14 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           @zoom-out="stepViewZoom(-1)"
           @reset="resetView"
         />
+        <CropActionBar
+          v-if="cropCorners"
+          :result="cropResult"
+          @cancel="stopCropping"
+          @apply="applyCrop"
+        />
         <EditorActionBar
+          v-else
           :can-undo="canUndo"
           :can-redo="canRedo"
           :has-selection="hasSelection"
@@ -461,6 +583,8 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       :camera-label="cameraLabel"
       @confirm="calibrate"
     />
+
+    <ExtendCanvasDialog v-model:open="extendOpen" :image-size="imageSize" @extend="changePicture" />
 
     <SaveImageDialog
       v-model:open="saveOpen"

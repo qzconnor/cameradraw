@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { SEGMENTED_GROUP, SEGMENTED_ITEM } from '@/components/common/segmented'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { errorMessage } from '@/lib/format'
 import { useMcpStore } from '@/stores/mcp'
@@ -53,10 +54,6 @@ const TRANSPORT_HINTS: Record<McpTransport, string> = {
     'Der Client startet CameraDraw selbst als Programm – für Claude Desktop und alle Clients, die Programme starten. Ohne Netzwerk-Port.'
 }
 
-/** Segments look like the client tabs below: a rounded pill, the picked one raised. */
-const SEGMENT =
-  'h-6.5 border border-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:border-input data-[state=on]:bg-input/30 data-[state=on]:text-foreground data-[state=on]:shadow-sm'
-
 function pickTransport(value: unknown): void {
   // Clicking the active item would deselect it – one of them is always picked.
   if (isMcpTransport(value) && value !== settings.mcpTransport) {
@@ -93,13 +90,13 @@ function pickTransport(value: unknown): void {
         type="single"
         size="sm"
         :spacing="0.5"
-        class="self-center bg-muted p-0.75"
+        :class="['self-center', SEGMENTED_GROUP]"
         aria-label="Verbindung"
         :model-value="settings.mcpTransport"
         @update:model-value="pickTransport"
       >
-        <ToggleGroupItem value="http" :class="SEGMENT">HTTP</ToggleGroupItem>
-        <ToggleGroupItem value="stdio" :class="SEGMENT">stdio</ToggleGroupItem>
+        <ToggleGroupItem value="http" :class="SEGMENTED_ITEM">HTTP</ToggleGroupItem>
+        <ToggleGroupItem value="stdio" :class="SEGMENTED_ITEM">stdio</ToggleGroupItem>
       </ToggleGroup>
     </Field>
 

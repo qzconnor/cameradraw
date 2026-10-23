@@ -14,7 +14,16 @@ import {
   type TPointerEventInfo,
   type XY
 } from 'fabric'
-import type { EditorDocument } from '@shared/types'
+import type { EditorDocument, ImageAdjustment } from '@shared/types'
+import {
+  pointMapper,
+  render,
+  renderAll,
+  sizeAfter,
+  toCanvas,
+  turnOf,
+  type Size
+} from '@/editor/adjust'
 import { CanvasHistory } from '@/editor/history'
 import {
   createMeasure,
@@ -51,6 +60,10 @@ const WHEEL_ZOOM = 0.0015
 const PASTE_OFFSET = 24
 /** Arrow key presses closer together than this are one undo step. */
 const NUDGE_MERGE_MS = 1000
+/** Adjusted pictures kept for undo and redo (each a full-size canvas). */
+const RENDER_CACHE = 4
+/** Longer side of the small copy of an adjusted picture (for the ambient light). */
+const PREVIEW_SIZE = 512
 
 /**
  * Objects copied with Ctrl+C, as saved – kept while the app runs, so they can be pasted into
@@ -72,9 +85,8 @@ const CONTROL_STYLE = {
 } as const
 
 export interface LoadImageOptions {
+  /** The original frame; the document's adjustments are applied to it. */
   url: string
-  width: number
-  height: number
   document: EditorDocument | null
   /** Scale for the measuring lines, null = lengths in pixels. */
   micronsPerPixel: number | null
@@ -148,6 +160,14 @@ export interface DrawingCanvas {
   dirty: Ref<boolean>
   /** Zoom of the view, 1 = whole image (up to `MAX_VIEW_ZOOM`). */
   viewZoom: Ref<number>
+  /** Size of the picture as drawn on – after its adjustments. */
+  imageSize: Ref<Size>
+  /** A small copy of the adjusted picture; null while it is the original. */
+  previewUrl: Ref<string | null>
+  /** How many adjustments the picture has (0 = the original). */
+  adjustmentCount: Ref<number>
+  /** Changes whenever the view moves (zoom, pan, resize) – for overlays that follow it. */
+  viewVersion: Ref<number>
   load(options: LoadImageOptions): Promise<void>
   setViewZoom(value: number): void
   /** Zooms in (1) or out (−1) by one step, like the + / − keys. */
@@ -199,6 +219,19 @@ export interface DrawingCanvas {
   moveObjects(objects: FabricObject[], dx: number, dy: number): void
   /** Zooms the view to `value` (1 = whole image), centred on `at` (image pixels) if given. */
   setView(value: number, at?: XY): void
+  /** The adjustments of the picture so far (turned, straightened, extended). */
+  adjustments(): ImageAdjustment[]
+  /** Changes the picture; the drawn objects move along (one undo step). */
+  adjustImage(adjustment: ImageAdjustment): Promise<void>
+  /** Back to the original frame, objects moved back as well (one undo step). */
+  resetImage(): Promise<void>
+  /** While locked (e.g. choosing crop corners) nothing is drawn or selected; zoom still works. */
+  setLocked(locked: boolean): void
+  /** The picture as drawn on (after its adjustments), e.g. for a magnifier. */
+  picture(): HTMLCanvasElement | null
+  /** Image point ↔ position in the window (client coordinates), for overlays. */
+  sceneToClient(point: XY): XY
+  clientToScene(point: XY): XY
   /** Resolves once undo, redo and paste steps still being applied are done. */
   settled(): Promise<void>
   isEditingText(): boolean
@@ -213,6 +246,13 @@ export interface DrawingCanvas {
 export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions): DrawingCanvas {
   let canvas: Canvas | null = null
   let size = { width: 0, height: 0 }
+  /** The frame as loaded, before any adjustment, and the picture shown now. */
+  let original: HTMLCanvasElement | null = null
+  let shown: HTMLCanvasElement | null = null
+  let adjustments: ImageAdjustment[] = []
+  /** Adjusted pictures by their adjustments (JSON), newest last. */
+  const rendered = new Map<string, HTMLCanvasElement>()
+  let locked = false
   let unit = 1
   let zoom = 1
   const history = new CanvasHistory()
@@ -237,6 +277,10 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const isEmpty = ref(true)
   const dirty = ref(false)
   const viewZoom = ref(1)
+  const imageSize = ref<Size>({ width: 0, height: 0 })
+  const previewUrl = ref<string | null>(null)
+  const adjustmentCount = ref(0)
+  const viewVersion = ref(0)
   const micronsPerPixel = ref<number | null>(null)
   /** Scale as loaded or last saved – a different one is an unsaved change. */
   let initialScale: number | null = null
@@ -248,7 +292,10 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
    */
   const serialized = (): Record<string, unknown>[] =>
     (canvas?.toObject(CUSTOM_PROPS).objects as Record<string, unknown>[] | undefined) ?? []
-  const snapshot = (): string => JSON.stringify(serialized())
+  /** One state of the history: the picture's adjustments and every object. */
+  const stateOf = (list: ImageAdjustment[], objects: Record<string, unknown>[]): string =>
+    JSON.stringify({ adjustments: list, objects })
+  const snapshot = (): string => stateOf(adjustments, serialized())
 
   /** Typed into the text being edited – not in the history yet, but already a change. */
   function typedChanges(): boolean {
@@ -315,6 +362,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       height / 2 - center.y * zoom
     ])
     canvas.requestRenderAll()
+    viewVersion.value++
   }
 
   useResizeObserver(host, layout)
@@ -467,6 +515,15 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     const c = canvas
     if (!c) return
     const t = tool.value
+    if (locked) {
+      c.discardActiveObject()
+      c.isDrawingMode = false
+      c.selection = false
+      c.skipTargetFind = true
+      c.defaultCursor = c.hoverCursor = 'default'
+      c.requestRenderAll()
+      return
+    }
 
     if (t !== 'select' && !(t === 'text' && c.getActiveObject() instanceof IText)) {
       c.discardActiveObject()
@@ -577,6 +634,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   }
 
   function onMouseDown(opt: TPointerEventInfo): void {
+    if (locked) return
     const t = tool.value
     if (isShapeTool(t) || t === 'measure') {
       draft = { from: opt.scenePoint, object: null }
@@ -694,13 +752,123 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     return objects
   }
 
-  async function load({
-    url,
-    width,
-    height,
-    document,
-    micronsPerPixel: scale
-  }: LoadImageOptions): Promise<void> {
+  /** The picture with `list` applied, from the cache or rendered (on top of the one before). */
+  function adjusted(list: ImageAdjustment[]): HTMLCanvasElement {
+    const key = JSON.stringify(list)
+    const cached = rendered.get(key)
+    if (cached) return cached
+    // Usually one step more than a picture shown before: only that step is rendered.
+    const before = list.length === 1 ? original : rendered.get(JSON.stringify(list.slice(0, -1)))
+    const picture = before ? render(before, list[list.length - 1]) : renderAll(original!, list)
+    rendered.set(key, picture)
+    if (rendered.size > RENDER_CACHE) rendered.delete(rendered.keys().next().value!)
+    return picture
+  }
+
+  function updatePreview(): void {
+    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = null
+    const picture = shown
+    if (!picture || picture === original) return
+    const factor = Math.min(1, PREVIEW_SIZE / Math.max(picture.width, picture.height))
+    const small = window.document.createElement('canvas')
+    small.width = Math.max(1, Math.round(picture.width * factor))
+    small.height = Math.max(1, Math.round(picture.height * factor))
+    small.getContext('2d')!.drawImage(picture, 0, 0, small.width, small.height)
+    small.toBlob(
+      (blob) => {
+        if (blob && shown === picture) previewUrl.value = URL.createObjectURL(blob)
+      },
+      'image/jpeg',
+      0.8
+    )
+  }
+
+  /** Shows the original with `list` applied, as the background everything is drawn on. */
+  function showAdjusted(list: ImageAdjustment[]): void {
+    const c = canvas
+    if (!c || !original) return
+    const picture = list.length ? adjusted(list) : original
+    shown = picture
+    updatePreview()
+    adjustments = list
+    adjustmentCount.value = list.length
+    size = { width: picture.width, height: picture.height }
+    imageSize.value = { ...size }
+    c.backgroundImage = new FabricImage(picture, {
+      left: size.width / 2,
+      top: size.height / 2,
+      selectable: false,
+      evented: false
+    })
+    resetView()
+  }
+
+  /** Moves objects along with the picture: each keeps its size, its centre goes where it maps to. */
+  function moveWith(objects: FabricObject[], map: (p: XY) => XY, turn: number): void {
+    for (const obj of objects) {
+      const { x, y } = map(obj.getCenterPoint())
+      if (turn) obj.set('angle', (obj.angle + turn + 360) % 360)
+      obj.setPositionByOrigin(new Point(x, y), 'center', 'center')
+      obj.setCoords()
+    }
+  }
+
+  function adjustImage(adjustment: ImageAdjustment): Promise<void> {
+    restoreQueue = restoreQueue.then(() => {
+      const c = canvas
+      if (!c || !original) return
+      c.discardActiveObject()
+      moveWith(c.getObjects(), pointMapper(size, adjustment), turnOf(adjustment))
+      showAdjusted([...adjustments, adjustment])
+      commit()
+    })
+    return restoreQueue
+  }
+
+  function resetImage(): Promise<void> {
+    restoreQueue = restoreQueue.then(() => {
+      const c = canvas
+      if (!c || !original || !adjustments.length) return
+      c.discardActiveObject()
+      // Back through the steps, the last one first – each from the size it produced.
+      const sizes = adjustments.reduce<Size[]>(
+        (list, adjustment) => [...list, sizeAfter(list[list.length - 1], adjustment)],
+        [{ width: original.width, height: original.height }]
+      )
+      for (let i = adjustments.length - 1; i >= 0; i--) {
+        const step = adjustments[i]
+        moveWith(c.getObjects(), pointMapper(sizes[i], step, true), -turnOf(step))
+      }
+      showAdjusted([])
+      commit()
+    })
+    return restoreQueue
+  }
+
+  function setLocked(value: boolean): void {
+    locked = value
+    draft = null
+    applyTool()
+  }
+
+  function sceneToClient({ x, y }: XY): XY {
+    const c = canvas
+    if (!c) return { x, y }
+    const rect = c.upperCanvasEl.getBoundingClientRect()
+    const [z, , , , tx, ty] = c.viewportTransform
+    return { x: rect.left + x * z + tx, y: rect.top + y * z + ty }
+  }
+
+  function clientToScene({ x, y }: XY): XY {
+    const c = canvas
+    if (!c) return { x, y }
+    const rect = c.upperCanvasEl.getBoundingClientRect()
+    const [z, , , , tx, ty] = c.viewportTransform
+    return { x: (x - rect.left - tx) / z, y: (y - rect.top - ty) / z }
+  }
+
+  async function load({ url, document, micronsPerPixel: scale }: LoadImageOptions): Promise<void> {
     await dispose()
     const el = host.value
     if (!el) return
@@ -720,15 +888,19 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       selectionLineWidth: 1
     })
     canvas = c
-    size = { width, height }
-    unit = Math.max(width, height) / REFERENCE_SIZE
     micronsPerPixel.value = initialScale = scale
     // Bind before adding saved objects so they get the same control style as new ones.
     bindEvents(c)
 
-    const background = await FabricImage.fromURL(url)
-    background.set({ left: width / 2, top: height / 2, selectable: false, evented: false })
-    c.backgroundImage = background
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    if (canvas !== c) return // another image was opened meanwhile
+    original = toCanvas(image)
+    rendered.clear()
+    // Style sizes follow the frame, so they stay the same whatever is cut off or added.
+    unit = Math.max(original.width, original.height) / REFERENCE_SIZE
+    showAdjusted(document?.adjustments ?? [])
 
     if (document?.objects.length) {
       const objects = await util.enlivenObjects<FabricObject>(document.objects)
@@ -748,7 +920,15 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     restoreQueue = restoreQueue.then(async () => {
       const c = canvas
       if (!c) return
-      const objects = await util.enlivenObjects<FabricObject>(JSON.parse(state))
+      const next = JSON.parse(state) as {
+        adjustments: ImageAdjustment[]
+        objects: Record<string, unknown>[]
+      }
+      const objects = await util.enlivenObjects<FabricObject>(next.objects)
+      if (canvas !== c) return
+      if (JSON.stringify(next.adjustments) !== JSON.stringify(adjustments)) {
+        showAdjusted(next.adjustments)
+      }
       c.discardActiveObject()
       c.remove(...c.getObjects())
       c.add(...prepareLoaded(objects))
@@ -1109,11 +1289,13 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   }
 
   function exportDocument(): EditorDocument {
+    const state = JSON.parse(snapshot()) as Pick<EditorDocument, 'adjustments' | 'objects'>
     return {
       version: 1,
       width: size.width,
       height: size.height,
-      objects: JSON.parse(snapshot()),
+      objects: state.objects,
+      ...(adjustments.length ? { adjustments: state.adjustments } : {}),
       ...(micronsPerPixel.value ? { micronsPerPixel: micronsPerPixel.value } : {})
     }
   }
@@ -1123,7 +1305,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
    * being written.
    */
   function markSaved(document: EditorDocument): void {
-    initialSnapshot = JSON.stringify(document.objects)
+    initialSnapshot = stateOf(document.adjustments ?? [], document.objects)
     initialScale = document.micronsPerPixel ?? null
     syncState()
   }
@@ -1132,6 +1314,11 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     ready.value = false
     const c = canvas
     canvas = null
+    original = shown = null
+    updatePreview()
+    rendered.clear()
+    adjustments = []
+    locked = false
     draft = null
     erasing = false
     textBeforeEdit = null
@@ -1159,6 +1346,10 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     isEmpty,
     dirty,
     viewZoom,
+    imageSize,
+    previewUrl,
+    adjustmentCount,
+    viewVersion,
     load,
     setViewZoom: (value: number) => setViewZoom(value),
     stepViewZoom,
@@ -1189,6 +1380,13 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     selectObjects,
     moveObjects,
     setView,
+    adjustments: () => adjustments,
+    adjustImage,
+    resetImage,
+    setLocked,
+    picture: () => shown,
+    sceneToClient,
+    clientToScene,
     settled: () => restoreQueue,
     isEditingText,
     finishInteraction,

@@ -30,6 +30,10 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Hinweis oder in der Galerie.
 - **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
   Lineal, siehe unten).
+- **Bild drehen, entzerren, erweitern** – Im Menü „Bild“ des Editors: um 90° drehen, perspektivisch
+  zuschneiden (vier Ecken auf die Kanten ziehen, z. B. eines schräg fotografierten Chips – das
+  Viereck wird zum geraden Rechteck) und eine Fläche anfügen, etwa rechts für Beschriftungen.
+  Gezeichnete Formen wandern mit; alles lässt sich rückgängig machen, das Original bleibt erhalten.
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
   füllen, kopieren, duplizieren, nach vorne oder hinten legen, löschen, alles auswählen.
 - **Formen kopieren** – `Strg+C` / `Strg+V` / `Strg+D`, auch von einem Bild ins nächste (Messlinien
@@ -107,6 +111,7 @@ später in den Einstellungen ändern.
 | `V` `P` `M` `E`      | Auswählen, Stift, Textmarker, Radierer                                 |
 | `L` `A` `R` `O` `T`  | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
 | `D`                  | Messen – Strecke mit Längenangabe (`Shift` = gerade)                   |
+| `C`                  | Perspektivisch zuschneiden: Ecken ziehen (Pfeiltasten: 1 px), `Enter`  |
 | Rechtsklick          | Text / Kopiertes hier einfügen, Kopieren, Duplizieren, Füllen, Löschen |
 | `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
 | `Strg+C` / `Strg+X`  | Auswahl kopieren / ausschneiden                                        |
@@ -182,16 +187,16 @@ Clients sich verbinden; darunter stehen Status und die Einrichtung pro Client zu
   startet. Der Eintrag in der App enthält den Pfad der laufenden Version (in der Entwicklung die
   Electron-Datei aus `node_modules` mit dem Projektordner).
 
-Solange der Server an ist, zeigt die Titelleiste ein Roboter-Symbol; ein grüner Punkt daran heißt,
-dass ein Assistent gerade etwas tut.
+In den Einstellungen steht, ob der Server läuft, welcher Client zuletzt verbunden war und ob gerade
+ein Assistent etwas tut.
 
-| Bereich   | Tools                                                                                                                                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`                                                                                                                                                                                                             |
-| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                    |
-| Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                 |
-| Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_save`, `editor_copy_image`, `editor_close` |
-| Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                   |
+| Bereich   | Tools                                                                                                                                                                                                                                                                                                                                                |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`                                                                                                                                                                                                                                                                                           |
+| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                                                                                                  |
+| Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                                                                                               |
+| Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_rotate`, `editor_perspective`, `editor_extend`, `editor_reset_image`, `editor_save`, `editor_copy_image`, `editor_close` |
+| Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                                                                                                 |
 
 - Koordinaten im Editor sind Bildpixel; gezeichnete Objekte haben einen Index in der
   Stapelreihenfolge (`editor_state`). Ungespeicherte Änderungen verwirft ein Tool nur mit
@@ -227,7 +232,9 @@ Speicherordner/
 
 - Jedes Bild liegt als PNG im Ordner und lässt sich ganz normal weiterverwenden.
 - Im versteckten Unterordner `.cameradraw/` liegen pro Bild das Originalbild (`*.base.png`) und die
-  Zeichnungs-Ebenen (`*.json`).
+  Zeichnungs-Ebenen (`*.json`). Gedreht, entzerrt oder erweitert wird nicht das Original: Die
+  Schritte stehen als `adjustments` in der `*.json` und werden beim Öffnen auf das Original
+  angewendet – „Bild › Original wiederherstellen“ nimmt sie auch später noch zurück.
 - Das Datum in der Galerie ist das Aufnahmedatum. Es steht in der `*.json` (`capturedAt`) und
   bleibt beim Bearbeiten, Umbenennen, Verschieben, Kopieren und Synchronisieren erhalten. Bilder
   ohne gespeichertes Datum (ältere Versionen, Bilder von außerhalb) bekommen es aus dem

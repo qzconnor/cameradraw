@@ -27,7 +27,7 @@ const INSTRUCTIONS = `CameraDraw shows the live picture of a camera (USB microsc
 
 Typical flow: get_state → capture (freezes the picture and opens it in the editor, or with mode "save" stores it right away) → editor_draw / editor_update … → editor_save. Saved images: list_library, get_image, open_image.
 
-Editor coordinates are image pixels (0,0 = top left; size in editor_state). Drawn objects are addressed by their index in stacking order (0 = bottom); indices change after deleting or arranging, so use the list the tools return. Sizes (strokeWidth, fontSize) are like the toolbar values, for a 1920 px wide image.
+Editor coordinates are image pixels (0,0 = top left; size in editor_state). The picture can be turned (editor_rotate), straightened from a perspective (editor_perspective, e.g. a chip photographed at an angle) and extended by plain space for notes (editor_extend) – all undoable, the original frame stays saved. Drawn objects are addressed by their index in stacking order (0 = bottom); indices change after deleting or arranging, so use the list the tools return. Sizes (strokeWidth, fontSize) are like the toolbar values, for a 1920 px wide image.
 
 screenshot shows the window; click, drag, press_key and type_text operate it like a person (window coordinates in CSS pixels), e.g. for dialogs. App texts and messages are German.`
 
@@ -504,6 +504,46 @@ export function createMcpServer(): McpServer {
     }),
     CHANGES,
     (args) => remote('editorSetScale', args)
+  )
+  add(
+    'editor_rotate',
+    'Turns the picture in the editor clockwise by 90, 180 or 270 degrees (-90 = a quarter to the left). Drawn objects turn along. Undoable; the original stays saved.',
+    z.object({
+      degrees: z.union([z.literal(90), z.literal(180), z.literal(270), z.literal(-90)])
+    }),
+    CHANGES,
+    (args) => remote('editorRotate', args)
+  )
+  add(
+    'editor_perspective',
+    'Perspective crop: the quadrilateral with these four corners (image pixels, any order) becomes a straight rectangle, everything outside is cut off – e.g. the edges of a chip or a sheet photographed at an angle. The size is the longer of each pair of opposite edges unless width/height are given (e.g. for the real aspect ratio). Look at editor_image to find the corners. Drawn objects move along. Undoable; the original stays saved.',
+    z.object({
+      corners: z.array(point).length(4),
+      width: z.number().int().min(1).max(12_000).optional(),
+      height: z.number().int().min(1).max(12_000).optional()
+    }),
+    CHANGES,
+    (args) => remote('editorPerspective', args)
+  )
+  add(
+    'editor_extend',
+    'Adds plain space around the picture (pixels per side), e.g. on the right to write notes there with editor_draw text. color: the fill, default white. Undoable.',
+    z.object({
+      top: z.number().int().min(0).optional(),
+      right: z.number().int().min(0).optional(),
+      bottom: z.number().int().min(0).optional(),
+      left: z.number().int().min(0).optional(),
+      color: color.optional()
+    }),
+    CHANGES,
+    (args) => remote('editorExtend', args)
+  )
+  add(
+    'editor_reset_image',
+    'Undoes every turn, perspective crop and added space at once – back to the original frame; drawn objects move back.',
+    none,
+    CHANGES,
+    () => remote('editorResetImage', {})
   )
   add(
     'editor_save',

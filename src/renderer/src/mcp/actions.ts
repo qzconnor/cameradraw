@@ -10,6 +10,7 @@ import {
 } from '@shared/names'
 import type { RemoteAction, RemoteActionArgs } from '@shared/mcp'
 import type { GalleryItem } from '@shared/types'
+import { MAX_SIDE, perspectiveFor } from '@/editor/adjust'
 import { formatScale } from '@/editor/measure'
 import { isBlockingOverlayOpen } from '@/lib/keyboard'
 import { useBurstStore } from '@/stores/burst'
@@ -172,8 +173,10 @@ function createActions(): Actions {
     return {
       path: session.path,
       newCapture: session.path === null,
-      width: session.width,
-      height: session.height,
+      // As drawn on: after turning, straightening or adding space.
+      width: canvas?.imageSize.value.width ?? session.width,
+      height: canvas?.imageSize.value.height ?? session.height,
+      adjustments: canvas?.adjustments() ?? [],
       capturedAt: iso(session.capturedAt),
       // The canvas knows first – the store follows a moment later.
       unsavedChanges: canvas?.dirty.value ?? editor.dirty,
@@ -592,6 +595,49 @@ function createActions(): Actions {
       const { canvas } = await requireEditor()
       canvas.setView(zoom ?? canvas.viewZoom.value, center)
       return { viewZoom: canvas.viewZoom.value }
+    },
+
+    async editorRotate({ degrees }) {
+      const remote = await requireEditor()
+      remote.stopCropping()
+      const turns = (((Math.round(degrees / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3
+      if (turns) await remote.canvas.adjustImage({ type: 'rotate', turns })
+      return editorDetail(remote)
+    },
+
+    async editorPerspective({ corners, width, height }) {
+      const remote = await requireEditor()
+      remote.stopCropping()
+      const adjustment = perspectiveFor(corners, { width, height })
+      if (!adjustment) {
+        throw new Error(
+          `Die vier Ecken bilden kein Viereck, oder das Ergebnis wäre größer als ${MAX_SIDE} Pixel.`
+        )
+      }
+      await remote.canvas.adjustImage(adjustment)
+      return editorDetail(remote)
+    },
+
+    async editorExtend({ top = 0, right = 0, bottom = 0, left = 0, color = '#ffffff' }) {
+      const remote = await requireEditor()
+      remote.stopCropping()
+      const sides = [top, right, bottom, left]
+      if (sides.some((side) => !Number.isInteger(side) || side < 0) || !sides.some(Boolean)) {
+        throw new Error('Mindestens eine Seite braucht eine Fläche (ganze Pixel ab 1).')
+      }
+      const { width, height } = remote.canvas.imageSize.value
+      if (Math.max(width + left + right, height + top + bottom) > MAX_SIDE) {
+        throw new Error(`Das Bild darf höchstens ${MAX_SIDE} Pixel breit und hoch werden.`)
+      }
+      await remote.canvas.adjustImage({ type: 'extend', top, right, bottom, left, color })
+      return editorDetail(remote)
+    },
+
+    async editorResetImage() {
+      const remote = await requireEditor()
+      remote.stopCropping()
+      await remote.canvas.resetImage()
+      return editorDetail(remote)
     },
 
     async editorSetScale({ micronsPerPixel, calibrate }) {
