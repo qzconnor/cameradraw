@@ -745,15 +745,21 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
            view. -->
       <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-3 pb-4">
         <div class="flex items-center gap-2 justify-self-start">
-          <div class="glass-panel p-1">
-            <HintTooltip :label="layersOpen ? 'Ebenen ausblenden' : 'Ebenen zeigen'" side="top">
-              <Toggle v-model="layersOpen" size="sm" aria-label="Ebenen" :class="ACTIVE_TOGGLE">
-                <LayersIcon />
-                Ebenen
-                <span class="tabular-nums opacity-70">{{ layers.length }}</span>
-              </Toggle>
-            </HintTooltip>
-          </div>
+          <!-- The toggle is the glass panel itself (like the scale badge): alone in a panel of its
+               own, the pressed toggle looked framed by a thick dark border. Height as the zoom
+               panel; the glass background repeated, so it replaces the toggle's transparent one. -->
+          <HintTooltip :label="layersOpen ? 'Ebenen ausblenden' : 'Ebenen zeigen'" side="top">
+            <Toggle
+              v-model="layersOpen"
+              size="sm"
+              aria-label="Ebenen"
+              :class="cn('glass-panel h-9 rounded-2xl bg-popover/65 px-3.5', ACTIVE_TOGGLE)"
+            >
+              <LayersIcon />
+              Ebenen
+              <span class="tabular-nums opacity-70">{{ layers.length }}</span>
+            </Toggle>
+          </HintTooltip>
           <EditorZoomControl
             :zoom="viewZoom"
             :max="MAX_VIEW_ZOOM"
