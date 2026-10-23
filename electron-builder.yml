@@ -27,8 +27,8 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-  # Installer with pages, so the installation folder can be chosen. Updates skip the folder page
-  # and install into the folder of the previous installation.
+  # Installer with pages, so the installation folder can be chosen. Updates skip the pages and
+  # install into the folder of the previous installation (see build/installer.nsh).
   oneClick: false
   allowToChangeInstallationDirectory: true
 mac:
