@@ -174,7 +174,8 @@ test('right click: duplicate, paste at the pointer, front and back', async ({
 
   // Copy A and paste it with its centre where the menu was opened
   await menu(page, onA, 'Kopieren')
-  const target = await canvasPoint(page, 0.8, 0.8)
+  // Top right: toasts of the saves before sit at the bottom right (on a small screen over the image)
+  const target = await canvasPoint(page, 0.8, 0.2)
   await menu(page, target, 'Hier einfügen')
   const box = await canvasBox(page)
   const fit = box.width / 1920
