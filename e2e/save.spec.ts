@@ -9,6 +9,7 @@ import {
   saveDialog,
   storeValue,
   toast,
+  waitForEditor,
   waitForLiveCamera
 } from './helpers/app'
 import { addImage, readLayers } from './helpers/library'
@@ -81,7 +82,7 @@ test('a new capture asks for name and project and then returns to the camera', a
 }) => {
   await waitForLiveCamera(page)
   await page.keyboard.press('Space')
-  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await waitForEditor(page)
   await drawRect(page)
   await page.keyboard.press('Control+s')
   await expect(saveDialog(page).getByRole('heading')).toHaveText('Bild speichern')

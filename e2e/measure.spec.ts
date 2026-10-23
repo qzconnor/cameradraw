@@ -10,6 +10,7 @@ import {
   storeCall,
   storeValue,
   toast,
+  waitForEditor,
   waitForLiveCamera,
   type Point
 } from './helpers/app'
@@ -103,6 +104,7 @@ test('a new capture gets the camera scale, divided by the zoom', async ({ page, 
   })
   await storeCall(page, 'camera', 'setZoom', 2)
   await page.keyboard.press('Space')
+  await waitForEditor(page)
   await expect(badge(page)).toBeVisible()
   await expect.poll(() => badgeScale(page)).toBeCloseTo(2.5, 3)
 

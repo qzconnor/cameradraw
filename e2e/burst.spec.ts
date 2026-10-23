@@ -9,6 +9,7 @@ import {
   storeCall,
   storeValue,
   toast,
+  waitForEditor,
   waitForLiveCamera
 } from './helpers/app'
 import { addImage, readLayers } from './helpers/library'
@@ -142,7 +143,7 @@ test('a new project from the burst bar is used for burst and later saves', async
   await expect(projectPicker(page)).toHaveCount(0)
   await page.mouse.click(5, 300)
   await page.keyboard.press('Space')
-  await expect.poll(() => editorOpen(page)).toBe(true)
+  await waitForEditor(page)
   await page.keyboard.press('Control+s')
   await expect(saveDialog(page).locator('#save-project')).toHaveText('Serie A')
 })

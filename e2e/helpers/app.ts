@@ -67,6 +67,14 @@ export const galleryCard = (page: Page, name: string): Locator =>
 export async function openImage(page: Page, name: string): Promise<void> {
   await openGallery(page)
   await galleryCard(page, name).click()
+  await waitForEditor(page)
+}
+
+/**
+ * Waits until the editor shows the picture and takes input – before that, keys like Strg+S are
+ * ignored (on a slow runner this takes a noticeable moment).
+ */
+export async function waitForEditor(page: Page): Promise<void> {
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await expect.poll(() => storeValue(page, 'editor', 'loading')).toBe(false)
   await expect(page.locator('.canvas-container')).toBeVisible()
