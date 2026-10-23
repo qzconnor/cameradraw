@@ -1,4 +1,7 @@
 out
+out-e2e
+test-results
+playwright-report
 dist
 pnpm-lock.yaml
 LICENSE.md

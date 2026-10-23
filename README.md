@@ -193,7 +193,7 @@ wird dabei zur Commit-Nachricht und bestimmt die nächste Version:
 | `fix: Galerie lädt nach dem Umbenennen neu`                   | Patch (1.0.0 → 1.0.1) |
 | `feat: Bilder als PDF exportieren`                            | Minor (1.0.0 → 1.1.0) |
 | `feat!: Neues Speicherformat` oder `BREAKING CHANGE:` im Text | Major (1.0.0 → 2.0.0) |
-| `docs: …`, `refactor: …`, `ci: …`, `chore: …`                 | kein Release          |
+| `docs: …`, `refactor: …`, `test: …`, `ci: …`, `chore: …`      | kein Release          |
 
 ```bash
 git switch -c feature/pdf-export
@@ -207,9 +207,10 @@ gh pr create --title "feat: Bilder als PDF exportieren"
 | Befehl                  | Zweck                                                         |
 | ----------------------- | ------------------------------------------------------------- |
 | `npm run dev`           | App mit Hot Reload starten                                    |
-| `npm run typecheck`     | TypeScript für Main und Renderer prüfen                       |
+| `npm run typecheck`     | TypeScript für Main, Renderer und Tests prüfen                |
 | `npm run lint`          | ESLint                                                        |
 | `npm run format`        | Prettier                                                      |
+| `npm run test:e2e`      | End-to-End-Tests mit Playwright (siehe unten)                 |
 | `npm run build:win`     | Windows-Installer bauen (`dist/`), inkl. Hintergrunddienst    |
 | `npm run build:service` | nur den Hintergrunddienst bauen (`service/publish/`)          |
 | `npm run release:build` | Build für das Release (wie `build:win`, ohne Veröffentlichen) |
@@ -224,6 +225,14 @@ erkannt wird, braucht nur `init` einen temporären `vite.config.ts`; `add` funkt
 Schrift (Geist) kommt lokal über `@fontsource-variable/geist` – deshalb hat `components.json`
 bewusst keinen `font`-Eintrag, sonst fügt die CLI bei jedem `add` wieder einen Google-Fonts-Import
 ein (den die CSP blockiert).
+
+### Tests
+
+`npm run test:e2e` baut die App nach `out-e2e/` und startet sie mit
+[Playwright](https://playwright.dev/docs/api/class-electron) – mit eigenem Profil, eigenem
+Speicherordner und der Testkamera von Chromium. Die Tests bedienen die App wie ein Mensch (Galerie,
+Editor, Speichern, Messen, Zoom, Fenster, Updates) und laufen bei jedem Pull Request als
+**E2E-Tests**. Details und Hinweise zum Schreiben neuer Tests: [e2e/README.md](e2e/README.md).
 
 ### Projektstruktur
 
@@ -248,7 +257,8 @@ src/
                      common/, ui/ (shadcn-vue)
 service/             Windows-Dienst „CameraDraw Buttons“ (C#, NativeAOT) für Kamera-Foto-Tasten
 scripts/             build-service.mjs
-.github/workflows/   ci.yml (PR-Prüfungen), pr-title.yml, release.yml (semantic-release)
+e2e/                 End-to-End-Tests (Playwright), Hilfen in fixtures.ts und helpers/
+.github/workflows/   ci.yml (PR-Prüfungen inkl. E2E-Tests), pr-title.yml, release.yml (semantic-release)
 ```
 
 ## Technische Details

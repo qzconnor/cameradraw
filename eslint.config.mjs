@@ -10,6 +10,9 @@ export default defineConfig(
       '**/node_modules',
       '**/dist',
       '**/out',
+      'out-e2e/**',
+      'test-results/**',
+      'playwright-report/**',
       'src/renderer/src/components/ui/**',
       '.agents/**'
     ]

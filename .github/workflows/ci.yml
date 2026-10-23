@@ -33,3 +33,22 @@ jobs:
           dotnet-version: 10.0.x
       - run: npm ci
       - run: npm run release:build
+
+  # Starts the built app and uses it like a person would, see e2e/README.md.
+  e2e:
+    name: E2E-Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results
+          path: test-results/
+          retention-days: 14

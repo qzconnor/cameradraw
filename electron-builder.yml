@@ -5,11 +5,11 @@ directories:
 files:
   - '!**/.vscode/*'
   - '!src/*'
-  - '!{service,scripts}/**'
+  - '!{service,scripts,e2e,out-e2e,test-results,playwright-report}/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig.e2e.json,playwright.config.ts}'
 asarUnpack:
   - resources/**
 win:
