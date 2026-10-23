@@ -78,3 +78,14 @@ export function readLayers(
   const stem = parts.pop()!.replace(/\.[^.]+$/, '')
   return JSON.parse(readFileSync(join(library, ...parts, '.cameradraw', `${stem}.json`), 'utf8'))
 }
+
+/** Width and height of a PNG file, from its header. */
+export function pngSize(file: string): { width: number; height: number } {
+  const header = readFileSync(file).subarray(16, 24)
+  return { width: header.readUInt32BE(0), height: header.readUInt32BE(4) }
+}
+
+/** Colour of the test picture (`testPicture`) at a point, away from the grid lines. */
+export function testColor(x: number, y: number, width = 1920, height = 1080): number[] {
+  return [60 + Math.round((x / width) * 150), 80 + Math.round((y / height) * 120), 170]
+}

@@ -30,6 +30,8 @@ export interface EditorRemote {
   copyImage(): Promise<void>
   /** Sets the scale for measuring, remembered for new pictures of the camera if asked. */
   calibrate(micronsPerPixel: number, remember: boolean): void
+  /** Leaves placing the corners of a perspective crop, if that is going on. */
+  stopCropping(): void
 }
 
 interface Remotes {

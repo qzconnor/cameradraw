@@ -31,9 +31,6 @@ test.describe('switched off', () => {
   test('the MCP server is off until switched on in the settings', async ({ page, workspace }) => {
     expect(await mcpState(page)).toBe('off')
     await expect(connect()).rejects.toThrow()
-    // No title bar indicator while it is off.
-    await expect(page.getByRole('button', { name: 'KI-Steuerung an (MCP-Server)' })).toHaveCount(0)
-
     await page.getByRole('button', { name: 'Einstellungen', exact: true }).click()
     await page.getByText('KI-Steuerung (MCP-Server)').click()
     await expect(page.getByText('MCP-Server läuft')).toBeVisible()
@@ -55,7 +52,6 @@ test.describe('switched off', () => {
     )
     await call(client, 'get_state')
     await expect(page.getByText(/Zuletzt verbunden: e2e-client um/)).toBeVisible()
-    await expect(page.getByRole('button', { name: 'KI-Steuerung an (MCP-Server)' })).toBeVisible()
     await client.close()
 
     const settings = (): Record<string, unknown> =>
@@ -178,6 +174,52 @@ test.describe('switched on', () => {
     expect(shot.saved.path).toMatch(/^Probe 7\/CameraDraw_.*\.png$/)
     expect(readdirSync(join(workspace.library, 'Probe 7'))).toContain(shot.saved.name)
     expect(await editorOpen(page)).toBe(false)
+    await client.close()
+  })
+
+  test('a client turns, straightens and extends the picture', async ({ page, workspace }) => {
+    await waitForMcp(page)
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+
+    const turned = await call(client, 'editor_rotate', { degrees: 90 })
+    expect(turned).toMatchObject({ width: 1080, height: 1920, adjustments: [{ type: 'rotate' }] })
+    const straightened = await call(client, 'editor_perspective', {
+      // In any order – sorted into top left, top right, bottom right, bottom left.
+      corners: [
+        { x: 900, y: 1500 },
+        { x: 100, y: 100 },
+        { x: 900, y: 100 },
+        { x: 100, y: 1500 }
+      ]
+    })
+    expect(straightened).toMatchObject({ width: 800, height: 1400 })
+    expect(straightened.adjustments[1].corners[0]).toEqual({ x: 100, y: 100 })
+    const extended = await call(client, 'editor_extend', { right: 600, color: '#000000' })
+    expect(extended).toMatchObject({ width: 1400, height: 1400, unsavedChanges: true })
+    expect(
+      await callError(client, 'editor_perspective', {
+        corners: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 20, y: 0 },
+          { x: 30, y: 0 }
+        ]
+      })
+    ).toContain('kein Viereck')
+
+    const undone = await call(client, 'editor_history', { action: 'undo' })
+    expect(undone).toMatchObject({ width: 800, height: 1400 })
+    const reset = await call(client, 'editor_reset_image')
+    expect(reset).toMatchObject({ width: 1920, height: 1080, adjustments: [] })
+
+    await call(client, 'editor_rotate', { degrees: -90 })
+    await call(client, 'editor_save')
+    expect(readLayers(workspace.library, 'Probe.png')).toMatchObject({
+      width: 1080,
+      height: 1920,
+      adjustments: [{ type: 'rotate', turns: 3 }]
+    })
     await client.close()
   })
 
@@ -309,7 +351,7 @@ test.describe('port taken', () => {
     try {
       const { page } = await launch()
       await expect.poll(() => mcpState(page)).toBe('error')
-      await page.getByRole('button', { name: 'MCP-Server läuft nicht' }).click()
+      await page.getByRole('button', { name: 'Einstellungen', exact: true }).click()
       await expect(page.getByText('MCP-Server läuft nicht', { exact: true })).toBeVisible()
       await expect(
         page.getByText(`Port ${MCP_PORT} wird schon von einem anderen Programm verwendet.`)

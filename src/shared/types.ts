@@ -76,12 +76,40 @@ export interface LibraryListing {
   items: GalleryItem[]
 }
 
+export interface ImagePoint {
+  x: number
+  y: number
+}
+
+/**
+ * A change of the picture itself. Saved with the layers and applied to the original frame in
+ * order, so the original stays untouched (see `renderer/src/editor/adjust.ts`).
+ */
+export type ImageAdjustment =
+  /** Turned clockwise by quarter turns. */
+  | { type: 'rotate'; turns: 1 | 2 | 3 }
+  /**
+   * The quadrilateral `corners` (top left, top right, bottom right, bottom left – in the picture
+   * before this step) straightened into a `width` × `height` rectangle.
+   */
+  | {
+      type: 'perspective'
+      corners: [ImagePoint, ImagePoint, ImagePoint, ImagePoint]
+      width: number
+      height: number
+    }
+  /** Space added around the picture, filled with `color`. */
+  | { type: 'extend'; top: number; right: number; bottom: number; left: number; color: string }
+
 /** Serialized drawing layer (fabric objects) on top of the base image. */
 export interface EditorDocument {
   version: 1
+  /** Size of the picture the objects are drawn on – after the adjustments. */
   width: number
   height: number
   objects: Record<string, unknown>[]
+  /** Changes of the picture (turned, straightened, extended); missing in older files. */
+  adjustments?: ImageAdjustment[]
   /** When the picture was taken (ms since epoch); added on saving, missing in older files. */
   capturedAt?: number
   /** Scale of the picture for measuring, if known (calibrated). */
