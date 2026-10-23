@@ -13,7 +13,8 @@ test.beforeEach(async ({ app }) => {
     for (const item of await clipboard.read().catch(() => [])) {
       const data: Record<string, Blob | string> = {}
       for (const type of item.types) data[type] = (await item.getType(type)) as Blob | string
-      saved.push(data)
+      // An empty clipboard may still report an item, but one without any data.
+      if (Object.keys(data).length) saved.push(data)
     }
     ;(globalThis as { savedClipboard?: unknown }).savedClipboard = saved
   })

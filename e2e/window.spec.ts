@@ -40,7 +40,19 @@ test('a position on no screen falls back to the default size', async ({ launch, 
     JSON.stringify({ bounds: { x: -9000, y: -9000, width: 1000, height: 660 }, maximized: false })
   )
   const { app } = await launch()
-  const b = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
-  expect({ width: b.width, height: b.height }).toEqual({ width: 1440, height: 900 })
-  expect(b.x).toBeGreaterThan(-1000)
+  const { bounds: b, area } = await app.evaluate(({ BrowserWindow, screen }) => ({
+    bounds: BrowserWindow.getAllWindows()[0].getBounds(),
+    area: screen.getPrimaryDisplay().workArea
+  }))
+  // 1440 × 900 – Windows makes it smaller on a smaller screen (like the 1024 × 768 of the CI runner).
+  if (area.width >= 1440 && area.height >= 900) {
+    expect({ width: b.width, height: b.height }).toEqual({ width: 1440, height: 900 })
+  } else {
+    expect(b.width).toBeLessThanOrEqual(area.width)
+    expect(b.height).toBeLessThanOrEqual(area.height)
+  }
+  // On the screen again
+  expect(b.x).toBeGreaterThanOrEqual(area.x - 10)
+  expect(b.y).toBeGreaterThanOrEqual(area.y - 10)
+  expect(b.x).toBeLessThan(area.x + area.width)
 })
