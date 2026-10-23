@@ -13,9 +13,19 @@ import {
 } from '@/editor/tools'
 import { useEditorStore } from '@/stores/editor'
 import ColorPicker from './ColorPicker.vue'
+import FontPicker from './FontPicker.vue'
 import ShapeToolPicker from './ShapeToolPicker.vue'
 import SizePicker from './SizePicker.vue'
+import TextAlignPicker from './TextAlignPicker.vue'
 import { ACTIVE_TOGGLE } from './toggle'
+
+defineProps<{
+  /**
+   * A text is typed or only texts are selected (also with another tool than the text tool): font,
+   * alignment and size.
+   */
+  forText?: boolean
+}>()
 
 const editor = useEditorStore()
 
@@ -56,12 +66,13 @@ function onToolChange(value: AcceptableValue): void {
 
     <ColorPicker v-model="editor.color" />
 
-    <SizePicker
-      v-if="editor.tool === 'text'"
-      v-model="editor.fontSize"
-      kind="font"
-      :options="FONT_SIZE_PRESETS"
-    />
+    <template v-if="editor.tool === 'text' || forText">
+      <FontPicker v-model="editor.fontFamily" />
+      <Separator orientation="vertical" class="mx-1 my-auto h-5" />
+      <TextAlignPicker v-model="editor.textAlign" />
+      <Separator orientation="vertical" class="mx-1 my-auto h-5" />
+      <SizePicker v-model="editor.fontSize" kind="font" :options="FONT_SIZE_PRESETS" />
+    </template>
     <SizePicker v-else v-model="editor.strokeWidth" kind="stroke" :options="STROKE_PRESETS" />
   </div>
 </template>

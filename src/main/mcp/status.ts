@@ -11,7 +11,8 @@ let status: McpStatus = {
   stdio: stdioCommand(),
   error: null,
   lastClient: null,
-  activeCalls: 0
+  activeCalls: 0,
+  lastCall: null
 }
 
 export const getMcpStatus = (): McpStatus => status
@@ -29,9 +30,9 @@ export function noteClient(name: string | null): void {
   if (known) setMcpStatus({ lastClient: { name: known, at: Date.now() } })
 }
 
-/** Counts a tool call while it runs, so the app can show that it is being controlled. */
-export async function trackCall<T>(run: () => Promise<T>): Promise<T> {
-  setMcpStatus({ activeCalls: status.activeCalls + 1 })
+/** Counts a tool call while it runs, so the app can show that – and what – it is controlled. */
+export async function trackCall<T>(tool: string, run: () => Promise<T>): Promise<T> {
+  setMcpStatus({ activeCalls: status.activeCalls + 1, lastCall: { tool, at: Date.now() } })
   try {
     return await run()
   } finally {

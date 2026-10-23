@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { canvasPoint, openImage, quickSave } from './helpers/app'
+import { canvasPoint, openImage, quickSave, storeValue } from './helpers/app'
 import { addImage, readLayers } from './helpers/library'
 
 /** Texts are Markdown: typed as their source, drawn formatted, saved as written. */
@@ -9,6 +9,10 @@ interface SavedText {
   type: string
   text: string
   fontSize: number
+  fontFamily: string
+  textAlign: string
+  originX: string
+  left: number
   width: number
   height: number
 }
@@ -32,8 +36,18 @@ async function clickInto(page: Page, fx: number, fy: number): Promise<void> {
   await page.mouse.click(p.x + 20, p.y + 20)
 }
 
-/** Shown while a text is typed. */
+/** The legend of what can be written, beside the picture while the text tool is picked. */
 const hint = (page: Page): Locator => page.getByRole('note', { name: 'Markdown' })
+
+/** Picks a font in the toolbar: searched for, and taken with Enter. */
+async function pickFont(page: Page, search: string): Promise<void> {
+  await page.getByRole('button', { name: 'Schriftart' }).click()
+  await page.getByPlaceholder('Schrift suchen …').fill(search)
+  // The installed fonts are read once – the first time they may still be coming.
+  await expect(page.getByRole('option').first()).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(page.getByPlaceholder('Schrift suchen …')).toHaveCount(0)
+}
 
 /** Height of plain text lines as fabric lays them out (size 48 on a 1920 px wide image). */
 const plainHeight = (lines: number): number => 48 * 1.13 * (1.16 * (lines - 1) + 1)
@@ -46,7 +60,6 @@ test('a text is typed as Markdown and drawn formatted', async ({ page, workspace
   await page.keyboard.press('Enter')
   await page.keyboard.type('Riss am Rand')
   await page.keyboard.press('Escape')
-  await expect(hint(page)).toHaveCount(0)
 
   const [text] = await savedTexts(page, workspace.library)
   // Saved as written, as an IText – older versions of the app show the source.
@@ -115,4 +128,78 @@ test('a text from before Markdown keeps its lines and size', async ({ page, work
   const [text] = await savedTexts(page, workspace.library, 'Notiz.png')
   expect(text).toMatchObject({ type: 'IText', text: 'Zeile 1\nZeile 2\n\nZeile 4' })
   expect(text.height).toBeCloseTo(plainHeight(4), 0)
+})
+
+test('the Markdown legend folds away and stays folded', async ({ page }) => {
+  await openImage(page, 'Probe.png')
+  await page.keyboard.press('t')
+  await expect(hint(page)).toContainText('**fett**')
+  await page.getByRole('button', { name: 'Markdown-Legende einklappen' }).click()
+  await expect(hint(page)).not.toContainText('**fett**')
+
+  // Only with the text tool – and folded still when it is picked again.
+  await page.keyboard.press('v')
+  await expect(hint(page)).toHaveCount(0)
+  await page.keyboard.press('t')
+  await expect(hint(page)).toBeVisible()
+  await expect(hint(page)).not.toContainText('**fett**')
+  await page.getByRole('button', { name: 'Markdown-Legende zeigen' }).click()
+  await expect(hint(page)).toContainText('**fett**')
+})
+
+test('a text in an installed font grows from where it was placed, centred', async ({
+  page,
+  workspace
+}) => {
+  await openImage(page, 'Probe.png')
+  await page.keyboard.press('t')
+  await pickFont(page, 'arial')
+  await expect.poll(() => storeValue(page, 'editor', 'fontFamily')).toBe('Arial')
+  await page.getByRole('button', { name: 'Zentriert' }).click()
+
+  const p = await canvasPoint(page, 0.5, 0.3)
+  await page.mouse.click(p.x, p.y)
+  await page.keyboard.type('Mitte')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('eine längere Zeile')
+  await page.keyboard.press('Escape')
+
+  const [text] = await savedTexts(page, workspace.library)
+  // The app's font stands in where Arial is missing.
+  expect(text).toMatchObject({
+    fontFamily: '"Arial", "Geist Variable", sans-serif',
+    textAlign: 'center',
+    originX: 'center'
+  })
+  // Its middle is where it was placed (the middle of the 1920 px wide picture).
+  expect(text.left).toBeCloseTo(960, -1)
+
+  // Aligned anew, it stays where it is: now its left edge is where it was.
+  await page.keyboard.press('Control+a')
+  await page.getByRole('button', { name: 'Linksbündig' }).click()
+  const [left] = await savedTexts(page, workspace.library)
+  expect(left).toMatchObject({ textAlign: 'left', originX: 'left' })
+  // (Within a pixel: fabric counts half the text's 1 px outline on each side.)
+  expect(Math.abs(left.left - (text.left - text.width / 2))).toBeLessThanOrEqual(1)
+  expect(left.width).toBeCloseTo(text.width, 0)
+})
+
+test('font and alignment picked while typing keep the keyboard in the text', async ({
+  page,
+  workspace
+}) => {
+  await openImage(page, 'Probe.png')
+  await clickWithText(page, 0.3, 0.3)
+  await page.keyboard.type('Probe')
+  await page.getByRole('button', { name: 'Rechtsbündig' }).click()
+  await pickFont(page, 'arial')
+  await page.keyboard.type(' fertig')
+  await page.keyboard.press('Escape')
+
+  const [text] = await savedTexts(page, workspace.library)
+  expect(text).toMatchObject({
+    text: 'Probe fertig',
+    textAlign: 'right',
+    fontFamily: '"Arial", "Geist Variable", sans-serif'
+  })
 })

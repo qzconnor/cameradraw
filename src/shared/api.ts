@@ -5,7 +5,7 @@ import type {
   SystemCamera,
   UsbDeviceId
 } from './devices'
-import type { McpStatus, RemoteAction } from './mcp'
+import type { McpPointer, McpStatus, RemoteAction } from './mcp'
 import type {
   AppSettings,
   AppState,
@@ -107,5 +107,7 @@ export interface CameraDrawApi {
      * Returns an unsubscribe function.
      */
     serve(handler: (action: RemoteAction, args: unknown) => Promise<unknown>): () => void
+    /** The mouse of a client moved, was pressed or let go. Returns an unsubscribe function. */
+    onPointer(callback: (pointer: McpPointer) => void): () => void
   }
 }

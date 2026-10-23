@@ -2,6 +2,7 @@
 import { ApertureIcon } from '@lucide/vue'
 import CameraSelect from '@/components/camera/CameraSelect.vue'
 import GalleryButton from '@/components/gallery/GalleryButton.vue'
+import McpActivityBadge from '@/components/mcp/McpActivityBadge.vue'
 import ModulesButton from '@/components/modules/ModulesButton.vue'
 import SettingsButton from '@/components/settings/SettingsButton.vue'
 import UpdatesButton from '@/components/updates/UpdatesButton.vue'
@@ -34,7 +35,12 @@ const isMac = window.api.platform === 'darwin'
 
     <CameraSelect size="sm" class="no-drag max-w-72" />
 
-    <div class="no-drag ml-auto flex items-center gap-1">
+    <!-- In the middle of the space left while an AI assistant controls the app. -->
+    <div class="flex min-w-0 flex-1 justify-center">
+      <McpActivityBadge />
+    </div>
+
+    <div class="no-drag flex items-center gap-1">
       <UpdatesButton />
       <GalleryButton />
       <SettingsButton />

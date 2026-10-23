@@ -54,6 +54,7 @@ import {
   type ImageMeta,
   type LayerMeta
 } from '@/editor/layers'
+import { cssFontFamily, fontName } from '@/editor/fonts'
 import { MarkdownText } from '@/editor/markdown'
 import {
   createMeasure,
@@ -66,7 +67,14 @@ import {
   restyleMeasure
 } from '@/editor/measure'
 import { CUSTOM_PROPS, createShape, kindOf, snapAngle, tag, type ObjectKind } from '@/editor/shapes'
-import { isShapeTool, type DrawStyle, type ShapeTool, type Tool } from '@/editor/tools'
+import {
+  isShapeTool,
+  isTextAlign,
+  type DrawStyle,
+  type ShapeTool,
+  type TextAlign,
+  type Tool
+} from '@/editor/tools'
 import { bytesToObjectUrl, canvasToBytes, toHex, withAlpha } from '@/lib/image'
 import {
   isInteractiveTarget,
@@ -79,7 +87,6 @@ import {
 const REFERENCE_SIZE = 1920
 const HIGHLIGHTER_ALPHA = 0.4
 const HIGHLIGHTER_WIDTH_FACTOR = 3
-const TEXT_FONT = '"Geist Variable", sans-serif'
 /** Zoom range on top of the fitted image (1 = whole image visible). */
 export const MAX_VIEW_ZOOM = 8
 /** Below 1 only to leave room beside the picture, e.g. while space is added to it. */
@@ -138,7 +145,7 @@ export interface LoadImageOptions {
   micronsPerPixel: number | null
 }
 
-export type StyleChange = 'color' | 'strokeWidth' | 'fontSize'
+export type StyleChange = 'color' | 'strokeWidth' | 'fontSize' | 'fontFamily' | 'textAlign'
 
 /** Changes to objects: style values as in the toolbar, and the text of a text. */
 export type ObjectChange = Partial<DrawStyle> & { text?: string }
@@ -169,6 +176,9 @@ export interface DrawnObject {
   filled?: boolean
   text?: string
   fontSize?: number
+  /** Texts: the font they ask for (it may be missing on this computer) and how lines line up. */
+  fontFamily?: string
+  textAlign?: TextAlign
   /** Measuring lines: the length as shown, and in image pixels. */
   length?: string
   lengthPixels?: number
@@ -270,6 +280,8 @@ export interface DrawingCanvas {
   canUndo: Ref<boolean>
   canRedo: Ref<boolean>
   hasSelection: Ref<boolean>
+  /** Only texts are selected – their font, alignment and size can be changed. */
+  textSelected: Ref<boolean>
   isEmpty: Ref<boolean>
   /** True if the drawing differs from the last loaded/saved state (incl. text being typed). */
   dirty: Ref<boolean>
@@ -526,6 +538,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const canUndo = ref(false)
   const canRedo = ref(false)
   const hasSelection = ref(false)
+  const textSelected = ref(false)
   const isEmpty = ref(true)
   const dirty = ref(false)
   const editingText = ref(false)
@@ -862,7 +875,9 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       typedChanges() ||
       micronsPerPixel.value !== initialScale ||
       !!imageView.value?.changed
-    hasSelection.value = (canvas?.getActiveObjects().length ?? 0) > 0
+    const selected = canvas?.getActiveObjects() ?? []
+    hasSelection.value = selected.length > 0
+    textSelected.value = hasSelection.value && selected.every((obj) => obj instanceof IText)
   }
 
   const isFillable = (obj: FabricObject): boolean => {
@@ -1150,7 +1165,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     const c = canvas
     const drawn = objects.filter(isDrawn)
     if (!c || !drawn.length) return
-    const { color, strokeWidth, fontSize, filled, text } = change
+    const { color, strokeWidth, fontSize, fontFamily, textAlign, filled, text } = change
 
     for (const obj of drawn) {
       const kind = kindOf(obj)
@@ -1176,8 +1191,12 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
           strokeWidth * unit * (kind === 'highlighter' ? HIGHLIGHTER_WIDTH_FACTOR : 1)
         )
       }
-      if (fontSize !== undefined && kind === 'text') obj.set('fontSize', fontSize * unit)
-      if (text !== undefined && obj instanceof IText) obj.set('text', text)
+      if (obj instanceof IText) {
+        if (fontSize !== undefined) obj.set('fontSize', fontSize * unit)
+        if (fontFamily !== undefined) obj.set('fontFamily', cssFontFamily(fontFamily))
+        if (text !== undefined) obj.set('text', text)
+        if (textAlign !== undefined) alignText(obj, textAlign)
+      }
       if (filled !== undefined && isFillable(obj)) {
         obj.set('fill', filled ? (obj.stroke as string) : 'transparent')
       }
@@ -1192,17 +1211,34 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     restyle(canvas?.getActiveObjects() ?? [], { [change]: style.value[change] })
   }
 
+  /**
+   * Lines the text up anew. It stays where it is, but from now on grows from its left edge, its
+   * middle or its right edge – like its lines (and the source while it is typed).
+   */
+  function alignText(text: IText, align: TextAlign): void {
+    const at = text.getPositionByOrigin(align, text.originY)
+    text.set({ textAlign: align, originX: align })
+    text.setPositionByOrigin(at, align, text.originY)
+  }
+
   // ── Pointer interaction ─────────────────────────────────────────────────────
 
-  function createText(at: XY, content: string, color: string, fontSize: number): IText {
+  type TextStyle = Pick<DrawStyle, 'color' | 'fontSize' | 'fontFamily' | 'textAlign'>
+
+  /** A text whose top edge starts (left), is centred (center) or ends (right) at `at`. */
+  function createText(at: XY, content: string, textStyle: TextStyle): IText {
+    const { color, fontSize, fontFamily, textAlign } = textStyle
+    const align = isTextAlign(textAlign) ? textAlign : 'left'
     return tag(
       new MarkdownText(content, {
         left: at.x,
         top: at.y,
-        // Anchor top-left so the text grows to the right while typing.
-        originX: 'left',
+        // Anchored at the top where it was placed, so it grows from there while typing: to the
+        // right, to both sides or to the left – like its lines.
+        originX: align,
         originY: 'top',
-        fontFamily: TEXT_FONT,
+        textAlign: align,
+        fontFamily: cssFontFamily(fontFamily),
         fontWeight: 600,
         fontSize: fontSize * unit,
         fill: color,
@@ -1215,7 +1251,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
   function addText(at: XY, e?: TPointerEvent): void {
     const c = canvas!
-    const text = createText(at, '', style.value.color, style.value.fontSize)
+    const text = createText(at, '', style.value)
     placeInLayer(text, drawingTarget())
     applyLayerStates(c, tool.value)
     c.setActiveObject(text)
@@ -2371,7 +2407,12 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
           micronsPerPixel.value
         )
       case 'text':
-        return createText(spec.at, spec.text, color, spec.fontSize ?? style.value.fontSize)
+        return createText(spec.at, spec.text, {
+          color,
+          fontSize: spec.fontSize ?? style.value.fontSize,
+          fontFamily: spec.fontFamily ?? style.value.fontFamily,
+          textAlign: spec.textAlign ?? style.value.textAlign
+        })
       case 'pen':
       case 'highlighter': {
         // Like the brush draws them: smoothed through the points.
@@ -2429,6 +2470,8 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       if (kind === 'text' && obj instanceof IText) {
         info.text = obj.text
         info.fontSize = round(obj.fontSize / unit, 1)
+        info.fontFamily = fontName(obj.fontFamily)
+        info.textAlign = isTextAlign(obj.textAlign) ? obj.textAlign : 'left'
       } else if (stroke) {
         const factor = kind === 'highlighter' ? HIGHLIGHTER_WIDTH_FACTOR : 1
         info.strokeWidth = round(stroke.strokeWidth / unit / factor, 1)
@@ -2584,6 +2627,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     canUndo,
     canRedo,
     hasSelection,
+    textSelected,
     isEmpty,
     dirty,
     editingText,

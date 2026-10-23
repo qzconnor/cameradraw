@@ -46,6 +46,18 @@ export interface McpStatus {
   lastClient: { name: string; at: number } | null
   /** Tool calls being handled right now. */
   activeCalls: number
+  /** The tool called last and when it started (ms since epoch) – the app shows what is done. */
+  lastCall: { tool: string; at: number } | null
+}
+
+/**
+ * Where a client moves, presses or releases the mouse (window coordinates, CSS pixels) – the app
+ * shows a pointer of its own there, so the user sees what is clicked.
+ */
+export interface McpPointer {
+  x: number
+  y: number
+  action: 'move' | 'down' | 'up'
 }
 
 // ── Requests to the renderer ──────────────────────────────────────────────────
@@ -85,6 +97,9 @@ export interface RemoteStyle {
   color?: string
   strokeWidth?: number
   fontSize?: number
+  /** Font of texts: "Geist" (the app's own) or an installed one (`listFonts`). */
+  fontFamily?: string
+  textAlign?: 'left' | 'center' | 'right'
   filled?: boolean
 }
 
@@ -121,6 +136,7 @@ export type RemoteSettings = Partial<
 export interface RemoteActionArgs {
   state: Record<string, never>
   listCameras: { refresh?: boolean }
+  listFonts: { query?: string }
   selectCamera: { id?: string; label?: string }
   setCamera: { paused?: boolean; zoom?: number }
   capture: { mode?: 'edit' | 'save' }

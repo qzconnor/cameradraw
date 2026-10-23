@@ -1,11 +1,13 @@
 import { IText, classRegistry, type ITextProps, type TOptions, type XY } from 'fabric'
 import { Lexer, type Token, type Tokens } from 'marked'
+import { isTextAlign, type TextAlign } from './tools'
 
 /**
  * Texts are Markdown (GitHub flavour): drawn formatted, and as their source while they are typed.
  * Headings, bold, italic, strike-through, code, links, lists with tasks, quotes, tables, code
  * blocks and rules. A line break stays a line break and an empty line an empty line, so text
- * without Markdown looks exactly as it did before.
+ * without Markdown looks exactly as it did before. Centred and right aligned texts line up each
+ * line and table on their own; code blocks and rules span the whole text anyway.
  */
 
 const MARKDOWN = { gfm: true, breaks: true }
@@ -268,6 +270,11 @@ export type MarkdownOp =
 
 type FillOp = Extract<MarkdownOp, { type: 'fill' }>
 
+function shiftOp(op: MarkdownOp, dx: number): void {
+  if (op.type === 'stroke') op.points = op.points.map((p) => ({ x: p.x + dx, y: p.y }))
+  else op.x += dx
+}
+
 export interface MarkdownLayout {
   ops: MarkdownOp[]
   width: number
@@ -294,17 +301,27 @@ class Layout {
   private readonly wide: { op: FillOp; x: number }[] = []
   /** Draws a list marker next to the first line of an item, once that is placed. */
   private marker: ((baseline: number) => void) | null = null
+  /** Lines and tables (their ops `from` … `to`) that line up to the right as a whole. */
+  private readonly aligned: { from: number; to: number; right: number }[] = []
 
   constructor(
     private readonly size: number,
-    private readonly font: Font
+    private readonly font: Font,
+    private readonly align: TextAlign
   ) {}
 
   finish(): MarkdownLayout {
     for (const { op, x } of this.wide) op.width = Math.max(op.width, this.right - x)
+    const width = Math.max(this.right, 1)
+    // Each into the room between its indent and the right edge of the text.
+    const share = this.align === 'right' ? 1 : this.align === 'center' ? 0.5 : 0
+    for (const { from, to, right } of share ? this.aligned : []) {
+      const dx = (width - right) * share
+      for (let i = from; i < to; i++) shiftOp(this.ops[i], dx)
+    }
     return {
       ops: this.ops,
-      width: Math.max(this.right, 1),
+      width,
       height: this.started ? this.y : LINE_BOX * this.size
     }
   }
@@ -380,9 +397,12 @@ class Layout {
 
   private line(line: MeasuredLine, x: number, size: number): void {
     const top = this.open()
+    // The list marker moves along with its line.
+    const from = this.ops.length
     this.marker?.(top + BASELINE * size)
     this.marker = null
     this.draw(line, x, top, size)
+    if (line.width) this.aligned.push({ from, to: this.ops.length, right: x + line.width })
     this.close(top, top + LINE_BOX * size, LEADING * size)
   }
 
@@ -618,6 +638,7 @@ class Layout {
     )
     const width = widths.reduce((sum, w) => sum + w, 0)
     const top = this.open(BLOCK_MARGIN * size)
+    const from = this.ops.length
     this.ops.push({
       type: 'fill',
       x,
@@ -676,19 +697,24 @@ class Layout {
       })
     }
 
+    this.aligned.push({ from, to: this.ops.length, right: x + width })
     this.right = Math.max(this.right, x + width)
     this.close(top, y, (LEADING + BLOCK_MARGIN) * size)
   }
 }
 
-/** Lays out `source` for a text of `fontSize` (scene pixels) in `family` and `weight`. */
+/**
+ * Lays out `source` for a text of `fontSize` (scene pixels) in `family` (a CSS font list) and
+ * `weight`, its lines aligned by `align`.
+ */
 export function layoutMarkdown(
   source: string,
   fontSize: number,
   family: string,
-  weight: number | string
+  weight: number | string,
+  align: TextAlign = 'left'
 ): MarkdownLayout {
-  const layout = new Layout(fontSize, { family, weight, italic: false, scale: 1 })
+  const layout = new Layout(fontSize, { family, weight, italic: false, scale: 1 }, align)
   layout.blocks(Lexer.lex(source, MARKDOWN), 0, 0)
   return layout.finish()
 }
@@ -756,7 +782,13 @@ export class MarkdownText extends IText<TOptions<ITextProps>> {
     super.initDimensions()
     this.formatted = this.isEditing
       ? undefined
-      : layoutMarkdown(this.text, this.fontSize, this.fontFamily, this.fontWeight)
+      : layoutMarkdown(
+          this.text,
+          this.fontSize,
+          this.fontFamily,
+          this.fontWeight,
+          isTextAlign(this.textAlign) ? this.textAlign : 'left'
+        )
     if (this.formatted) {
       this.width = this.formatted.width
       this.height = this.formatted.height

@@ -31,7 +31,13 @@ function onChange(next: AcceptableValue): void {
     @update:model-value="onChange"
   >
     <HintTooltip v-for="(option, i) in options" :key="option" :label="label(option)">
-      <ToggleGroupItem :value="String(option)" :aria-label="label(option)" :class="ACTIVE_TOGGLE">
+      <!-- mousedown.prevent: a text being typed keeps the keyboard. -->
+      <ToggleGroupItem
+        :value="String(option)"
+        :aria-label="label(option)"
+        :class="ACTIVE_TOGGLE"
+        @mousedown.prevent
+      >
         <span
           v-if="kind === 'stroke'"
           class="rounded-full bg-current"

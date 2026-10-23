@@ -212,6 +212,108 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client writes in an installed font and aligns its texts', async ({ page, workspace }) => {
+    await waitForMcp(page)
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+    await waitForEditor(page)
+
+    const fonts = await call(client, 'list_fonts', { query: 'aria' })
+    expect(fonts.default).toBe('Geist')
+    expect(fonts.fonts).toContain('Arial')
+
+    // A font in any case is taken as installed; "at" is the top middle of a centred text.
+    const drawn = await call(client, 'editor_draw', {
+      shapes: [
+        {
+          type: 'text',
+          at: { x: 960, y: 100 },
+          text: 'Mitte\nund eine längere Zeile',
+          fontFamily: 'arial',
+          textAlign: 'center'
+        }
+      ]
+    })
+    const middle = (box: { left: number; width: number }): number => box.left + box.width / 2
+    expect(drawn.objects[0]).toMatchObject({ fontFamily: 'Arial', textAlign: 'center' })
+    expect(middle(drawn.objects[0].box)).toBeCloseTo(960, -1)
+
+    // Another font and alignment: the text stays where it is.
+    const updated = await call(client, 'editor_update', {
+      indices: [0],
+      fontFamily: 'Geist',
+      textAlign: 'right'
+    })
+    expect(updated.objects[0]).toMatchObject({ fontFamily: 'Geist', textAlign: 'right' })
+    expect(middle(updated.objects[0].box)).toBeCloseTo(960, -1)
+
+    expect(
+      await callError(client, 'editor_draw', {
+        shapes: [{ type: 'text', at: { x: 0, y: 0 }, text: 'x', fontFamily: 'Gibt es nicht' }]
+      })
+    ).toContain('nicht installiert')
+
+    // The toolbar's font and alignment, for texts written next.
+    const tool = await call(client, 'editor_set_tool', {
+      tool: 'text',
+      fontFamily: 'ARIAL',
+      textAlign: 'right'
+    })
+    expect(tool.style).toMatchObject({ fontFamily: 'Arial', textAlign: 'right' })
+    await expect.poll(() => storeValue(page, 'editor', 'fontFamily')).toBe('Arial')
+
+    await call(client, 'editor_save')
+    expect(readLayers(workspace.library, 'Probe.png').objects[0]).toMatchObject({
+      fontFamily: '"Geist Variable", sans-serif',
+      textAlign: 'right',
+      originX: 'right'
+    })
+    await client.close()
+  })
+
+  test('the app shows the user that a client is at work, and where', async ({ page }) => {
+    await waitForMcp(page)
+    const badge = page.getByRole('status', { name: /^E2e Client/ })
+    const glow = page.locator('[data-mcp-glow]')
+    const pointer = page.locator('[data-mcp-pointer]')
+    await expect(badge).toHaveCount(0)
+    await expect(glow).toHaveCount(0)
+
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+    await waitForEditor(page)
+    await expect(badge).toBeVisible()
+    await expect(glow).toBeVisible()
+
+    /** Where the tip of the client's pointer is (window coordinates, rounded). */
+    const tip = async (): Promise<number[] | null> => {
+      const rect = await pointer.locator('svg').boundingBox()
+      return rect && [Math.round(rect.x + 1), Math.round(rect.y + 1)]
+    }
+    const box = await canvasBox(page)
+    const point = (fx: number, fy: number): { x: number; y: number } => ({
+      x: Math.round(box.x + box.width * fx),
+      y: Math.round(box.y + box.height * fy)
+    })
+
+    // Its pointer, with its name, goes to what it draws (a square around a quarter of the picture)…
+    await call(client, 'editor_draw', {
+      shapes: [{ type: 'rect', from: { x: 430, y: 220 }, to: { x: 530, y: 320 } }]
+    })
+    await expect(pointer).toContainText('E2e Client')
+    const quarter = point(0.25, 0.25)
+    await expect
+      .poll(async () => (await tip())?.map((v, i) => Math.abs(v - [quarter.x, quarter.y][i]) < 3))
+      .toEqual([true, true])
+
+    // …and where it clicks (on the picture, with the select tool).
+    await call(client, 'editor_set_tool', { tool: 'select' })
+    const middle = point(0.5, 0.5)
+    await callText(client, 'click', middle)
+    await expect.poll(tip).toEqual([middle.x, middle.y])
+    await client.close()
+  })
+
   test('a client turns, straightens and extends the picture', async ({ page, workspace }) => {
     await waitForMcp(page)
     const client = await connect()

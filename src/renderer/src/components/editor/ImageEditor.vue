@@ -37,9 +37,9 @@ import EditorToolbar from './EditorToolbar.vue'
 import EditorZoomControl from './EditorZoomControl.vue'
 import ExtendCanvasOverlay from './ExtendCanvasOverlay.vue'
 import ImageViewBar from './ImageViewBar.vue'
+import MarkdownLegend from './MarkdownLegend.vue'
 import PerspectiveCropOverlay from './PerspectiveCropOverlay.vue'
 import SaveImageDialog from './SaveImageDialog.vue'
-import TextFormatHint from './TextFormatHint.vue'
 import { ACTIVE_TOGGLE } from './toggle'
 
 const props = defineProps<{ session: EditorSession }>()
@@ -62,6 +62,7 @@ const {
   canUndo,
   canRedo,
   hasSelection,
+  textSelected,
   isEmpty,
   dirty,
   load,
@@ -140,6 +141,14 @@ watch(
 watch(
   () => editor.fontSize,
   () => applyStyleToSelection('fontSize')
+)
+watch(
+  () => editor.fontFamily,
+  () => applyStyleToSelection('fontFamily')
+)
+watch(
+  () => editor.textAlign,
+  () => applyStyleToSelection('textAlign')
 )
 
 async function run(action: () => Promise<unknown>, failure: string): Promise<void> {
@@ -650,6 +659,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           class="shrink-0"
           :class="(cropCorners || imageView) && 'pointer-events-none opacity-40'"
           :inert="!!(cropCorners || imageView)"
+          :for-text="editingText || textSelected"
         />
       </div>
 
@@ -720,10 +730,10 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             :to-scene="clientToScene"
             :picture="canvas.picture()"
           />
-          <!-- Texts are Markdown – what can be written, while one is typed. -->
-          <TextFormatHint
-            v-if="editingText"
-            class="absolute bottom-3 left-1/2 w-max -translate-x-1/2"
+          <!-- Texts are Markdown – what can be written, beside the picture while texts are written. -->
+          <MarkdownLegend
+            v-if="ready && (tool === 'text' || editingText) && !cropCorners && !imageView"
+            class="absolute top-0 right-0 z-10"
           />
           <div v-if="!ready" class="absolute inset-0 grid place-items-center">
             <Spinner class="size-6" />

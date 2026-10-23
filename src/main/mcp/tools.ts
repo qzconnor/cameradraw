@@ -31,9 +31,9 @@ Editor coordinates are image pixels of the canvas (0,0 = top left; size in edito
 
 The picture has layers (editor_state → layers, bottom first): image layers (the frame, and pictures pulled in from the library with editor_insert_image – each can be cropped and turned on its own, also later), space added beside the picture, and drawing layers holding the drawn objects. The user works in their own layers; draw into layers of your own: editor_draw without layer uses the layer you used last (a new one of yours on top the first time). Make as many as you need with editor_layers add (e.g. one for labels, one for measurements), switch with editor_layers use or the layer parameter of editor_draw, and reorder, hide, rename, copy or delete them with editor_layers.
 
-Texts are Markdown (GitHub flavour) and are drawn formatted: # headings, **bold**, _italic_, ~~strike-through~~, \`code\`, lists (-, 1., - [ ] / - [x] tasks, nested), > quotes, tables, fenced code blocks and --- rules. Every line break is kept and an empty line stays an empty line; lines only break where the text has a line break. Plain text stays plain (escape a literal *, _ or # with a backslash). editor_state returns the source; the box is the formatted size.
+Texts are Markdown (GitHub flavour) and are drawn formatted: # headings, **bold**, _italic_, ~~strike-through~~, \`code\`, lists (-, 1., - [ ] / - [x] tasks, nested), > quotes, tables, fenced code blocks and --- rules. Every line break is kept and an empty line stays an empty line; lines only break where the text has a line break. Plain text stays plain (escape a literal *, _ or # with a backslash). editor_state returns the source; the box is the formatted size. Texts can use any installed font (fontFamily, see list_fonts; default "Geist", the app's own) and be aligned left, center or right (textAlign): the lines line up that way, and the text's "at" point is its top left, top middle or top right corner.
 
-screenshot shows the window; click, drag, press_key and type_text operate it like a person (window coordinates in CSS pixels), e.g. for dialogs. App texts and messages are German.`
+screenshot shows the window; click, drag, press_key and type_text operate it like a person (window coordinates in CSS pixels), e.g. for dialogs. While you work, the app shows the user a glowing frame, what you are doing and a pointer with your name where you click – they are not part of the app's content. App texts and messages are German.`
 
 const READ_ONLY: ToolAnnotations = { readOnlyHint: true, openWorldHint: false }
 const CHANGES: ToolAnnotations = {
@@ -85,11 +85,21 @@ const strokeWidth = z
   .max(100)
   .describe('Line width as in the toolbar (2, 4, 8, 14, 24 …)')
 const fontSize = z.number().min(6).max(400).describe('Text size as in the toolbar (24 … 112)')
+const fontFamily = z
+  .string()
+  .min(1)
+  .max(200)
+  .describe('Font of texts: "Geist" (the app\'s own) or an installed font from list_fonts')
+const textAlign = z
+  .enum(['left', 'center', 'right'])
+  .describe('How the lines of texts line up – and where "at" is: top left, middle or right')
 const filled = z.boolean().describe('Fill rectangles and ellipses with their colour')
 const style = {
   color: color.optional(),
   strokeWidth: strokeWidth.optional(),
   fontSize: fontSize.optional(),
+  fontFamily: fontFamily.optional(),
+  textAlign: textAlign.optional(),
   filled: filled.optional()
 }
 const project = z
@@ -128,7 +138,7 @@ const shape = z.union([
   }),
   z.object({
     type: z.literal('text'),
-    at: point.describe('Top left corner'),
+    at: point.describe('Top left corner – top middle or top right with textAlign center or right'),
     text: markdown,
     ...style
   })
@@ -168,7 +178,7 @@ export function createMcpServer(): McpServer {
     server.registerTool(name, { description, inputSchema: schema, annotations }, (args, ctx) => {
       // Clients of the 2026 protocol name themselves in every request.
       noteClient(ctx.mcpReq.envelope?.[CLIENT_INFO_META_KEY]?.name ?? null)
-      return trackCall(() => run(args as z.infer<S>))
+      return trackCall(name, () => run(args as z.infer<S>))
     })
   }
 
@@ -311,6 +321,14 @@ export function createMcpServer(): McpServer {
     (args) => remote('setBurst', args)
   )
 
+  add(
+    'list_fonts',
+    'Fonts texts can use: "Geist" (the app\'s own, the default) and the fonts installed on the computer, sorted by name. query: only those whose name contains it.',
+    z.object({ query: z.string().optional() }),
+    READ_ONLY,
+    (args) => remote('listFonts', args)
+  )
+
   // Library
   add(
     'list_library',
@@ -426,7 +444,7 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_draw',
-    'Draws objects onto the image (image pixels; one undo step) – into a drawing layer of your own: the one you used last, or layer (any drawing layer, yours from then on). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left; Markdown, e.g. a heading, a list or a table of findings). Colour and sizes default to the editor\'s current style.',
+    'Draws objects onto the image (image pixels; one undo step) – into a drawing layer of your own: the one you used last, or layer (any drawing layer, yours from then on). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left, or top middle / top right with textAlign center / right; Markdown, e.g. a heading, a list or a table of findings; fontFamily from list_fonts). Colour, sizes, font and alignment default to the editor\'s current style.',
     z.object({
       shapes: z.array(shape).min(1).max(200),
       layer: layerId.optional()
@@ -468,7 +486,7 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_update',
-    'Changes objects: colour, line width, text size, fill (rectangles, ellipses), the text (Markdown) of a text object, or moves them by moveBy image pixels.',
+    'Changes objects: colour, line width, size, font and alignment of texts (a text stays where it is), fill (rectangles, ellipses), the text (Markdown) of a text object, or moves them by moveBy image pixels.',
     z.object({
       indices,
       ...style,
