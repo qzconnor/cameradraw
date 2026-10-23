@@ -129,8 +129,8 @@ export async function quickSave(page: Page): Promise<void> {
   await page.keyboard.press('Control+s')
   await expect.poll(written).toBeGreaterThan(before)
   await expect.poll(() => storeValue(page, 'editor', 'dirty')).toBe(false)
-  // The toast of a save just before may still be showing.
-  await expect(toast(page, 'Gespeichert').last()).toBeVisible()
+  // Toasts are listed newest first; older ones (of saves just before) may be hidden in the stack.
+  await expect(toast(page, 'Gespeichert').first()).toBeVisible()
 }
 
 export const toast = (page: Page, title: string): Locator =>
