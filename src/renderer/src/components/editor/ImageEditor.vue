@@ -31,6 +31,7 @@ import EditorZoomControl from './EditorZoomControl.vue'
 import ExtendCanvasDialog from './ExtendCanvasDialog.vue'
 import PerspectiveCropOverlay from './PerspectiveCropOverlay.vue'
 import SaveImageDialog from './SaveImageDialog.vue'
+import TextFormatHint from './TextFormatHint.vue'
 
 const props = defineProps<{ session: EditorSession }>()
 
@@ -74,6 +75,7 @@ const {
   arrange,
   settled,
   isEditingText,
+  editingText,
   finishInteraction,
   exportImage,
   exportDocument,
@@ -531,6 +533,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           :to-client="sceneToClient"
           :to-scene="clientToScene"
           :picture="canvas.picture()"
+        />
+        <!-- Texts are Markdown – what can be written, while one is typed. -->
+        <TextFormatHint
+          v-if="editingText"
+          class="absolute bottom-3 left-1/2 w-max -translate-x-1/2"
         />
         <div v-if="!ready" class="absolute inset-0 grid place-items-center">
           <Spinner class="size-6" />

@@ -28,6 +28,11 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Serienaufnahme speichern `Leertaste`, Auslöser und Foto-Taste das Bild sofort ins gewählte
   Projekt, `Shift+Leertaste` tut das auch einzeln. Gezeichnet werden kann später – „Bearbeiten“ im
   Hinweis oder in der Galerie.
+- **Text mit Markdown** – Texte sind Markdown: `# Überschrift`, `**fett**`, `_kursiv_`,
+  `~~durchgestrichen~~`, `` `Code` ``, Listen, Aufgaben (`- [ ]` / `- [x]`), Zitate, Tabellen,
+  Codeblöcke und Trennlinien. Beim Schreiben steht der Quelltext da, danach der formatierte Text;
+  `Strg+B` / `Strg+I` setzen fett und kursiv. Ohne Markdown sieht ein Text aus wie immer – jeder
+  Zeilenumbruch und jede Leerzeile bleibt.
 - **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
   Lineal, siehe unten).
 - **Bild drehen, entzerren, erweitern** – Im Menü „Bild“ des Editors: um 90° drehen, perspektivisch
@@ -114,6 +119,7 @@ später in den Einstellungen ändern.
 | `C`                  | Perspektivisch zuschneiden: Ecken ziehen (Pfeiltasten: 1 px), `Enter`  |
 | Rechtsklick          | Text / Kopiertes hier einfügen, Kopieren, Duplizieren, Füllen, Löschen |
 | `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
+| `Strg+B` / `Strg+I`  | Beim Schreiben: Auswahl fett / kursiv (Markdown)                       |
 | `Strg+C` / `Strg+X`  | Auswahl kopieren / ausschneiden                                        |
 | `Strg+V` / `Strg+D`  | Einfügen (etwas versetzt, auch in ein anderes Bild) / Duplizieren      |
 | Pfeiltasten          | Auswahl um 1 Pixel verschieben (`Shift` = 10 Pixel)                    |
@@ -186,6 +192,10 @@ Clients sich verbinden; darunter stehen Status und die Einrichtung pro Client zu
   laufende App weiter. Es wird kein Netzwerk-Port geöffnet. CameraDraw sollte laufen, wenn der Client
   startet. Der Eintrag in der App enthält den Pfad der laufenden Version (in der Entwicklung die
   Electron-Datei aus `node_modules` mit dem Projektordner).
+
+Texte schreibt ein Assistent in Markdown (`editor_draw` mit `type: "text"`, `editor_update`) – etwa
+einen Befund mit Überschrift, Aufgabenliste und Messwert-Tabelle auf einer mit `editor_extend`
+angefügten Fläche. `editor_state` liefert den Quelltext und die Größe des formatierten Texts.
 
 In den Einstellungen steht, ob der Server läuft, welcher Client zuletzt verbunden war und ob gerade
 ein Assistent etwas tut.
@@ -335,7 +345,7 @@ src/
                      hardware, modules, mcp
     composables/     useDrawingCanvas (fabric.js-Canvas, Werkzeuge, Undo/Redo, Export),
                      useGalleryDrag (Drag & Drop in der Galerie)
-    editor/          Werkzeug-Definitionen, Formen, History
+    editor/          Werkzeug-Definitionen, Formen, Markdown-Text (markdown.ts), History
     lib/             gallery.ts (Filtern und Sortieren), Bild- und Kamera-Hilfen
     modules/         Geräte-Module – eine Datei pro Gerätetyp, Liste in index.ts
     mcp/             Aktionen der KI-Steuerung (actions.ts) und was Kamera und Editor dafür
