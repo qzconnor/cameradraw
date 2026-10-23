@@ -87,7 +87,9 @@ test('measures in pixels, then in mm after calibrating with a known distance', a
   await expect.poll(() => badgeScale(page)).toBeCloseTo(scale, 2)
 
   // Removing the scale brings back pixels and is an unsaved change
-  await badge(page).click()
+  // With the keyboard: a toast may lie over the badge, and a hovered toast stays open.
+  await badge(page).focus()
+  await page.keyboard.press('Enter')
   await page.getByRole('menuitem', { name: 'Maßstab entfernen' }).click()
   await expect(badge(page)).toHaveCount(0)
   expect(await storeValue(page, 'editor', 'dirty')).toBe(true)

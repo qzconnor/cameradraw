@@ -46,6 +46,10 @@ export async function storeCall(
 
 export async function waitForLiveCamera(page: Page): Promise<void> {
   await expect.poll(() => storeValue(page, 'camera', 'status'), { timeout: 15_000 }).toBe('live')
+  // "live" comes with the stream; the first picture can take a moment longer (on a slow runner).
+  await expect
+    .poll(() => page.locator('main video').evaluate((v: HTMLVideoElement) => v.videoWidth))
+    .toBeGreaterThan(0)
 }
 
 export async function openGallery(page: Page): Promise<void> {
@@ -66,6 +70,21 @@ export async function openImage(page: Page, name: string): Promise<void> {
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await expect.poll(() => storeValue(page, 'editor', 'loading')).toBe(false)
   await expect(page.locator('.canvas-container')).toBeVisible()
+  // The picture itself loads a moment longer (a spinner shows meanwhile).
+  await expect(page.locator('main').getByRole('status')).toHaveCount(0)
+}
+
+/** Path of the image open in the editor (the session itself holds the image bytes). */
+function editorPath(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const host = document.querySelector('#app') as unknown as {
+      __vue_app__: { config: { globalProperties: { $pinia: { _s: Map<string, object> } } } }
+    }
+    const editor = host.__vue_app__.config.globalProperties.$pinia._s.get('editor') as {
+      session: { path: string | null } | null
+    }
+    return editor.session?.path ?? null
+  })
 }
 
 export async function canvasBox(
@@ -96,9 +115,19 @@ export async function drawRect(page: Page, from = [0.3, 0.3], to = [0.5, 0.5]): 
   await drag(page, await canvasPoint(page, from[0], from[1]), await canvasPoint(page, to[0], to[1]))
 }
 
-/** Strg+S on an image from the gallery – saved in place, the editor stays open. */
+/**
+ * Strg+S on an image from the gallery – saved in place, the editor stays open. Waits until the
+ * file is written again: an image without changes is not dirty before saving either.
+ */
 export async function quickSave(page: Page): Promise<void> {
+  const path = await editorPath(page)
+  const written = async (): Promise<number> =>
+    (await storeValue<{ path: string; mtime: number }[]>(page, 'gallery', 'items')).find(
+      (i) => i.path === path
+    )?.mtime ?? 0
+  const before = await written()
   await page.keyboard.press('Control+s')
+  await expect.poll(written).toBeGreaterThan(before)
   await expect.poll(() => storeValue(page, 'editor', 'dirty')).toBe(false)
   // The toast of a save just before may still be showing.
   await expect(toast(page, 'Gespeichert').last()).toBeVisible()
