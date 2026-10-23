@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { readFile } from 'fs/promises'
 import {
+  CLIENT_INFO_META_KEY,
   McpServer,
   type CallToolResult,
   type StandardSchemaWithJSON,
@@ -20,7 +21,7 @@ import {
   typeText,
   type EncodedImage
 } from './input'
-import { trackCall } from './status'
+import { noteClient, trackCall } from './status'
 
 const INSTRUCTIONS = `CameraDraw shows the live picture of a camera (USB microscope or webcam). Pictures are frozen ("captured"), drawn on and saved into a library of projects. Everything happens visibly in the app window – the user watches.
 
@@ -153,9 +154,11 @@ export function createMcpServer(): McpServer {
   ): void {
     // The SDK has checked the arguments against the schema before the call.
     const schema: StandardSchemaWithJSON = inputSchema
-    server.registerTool(name, { description, inputSchema: schema, annotations }, (args) =>
-      trackCall(() => run(args as z.infer<S>))
-    )
+    server.registerTool(name, { description, inputSchema: schema, annotations }, (args, ctx) => {
+      // Clients of the 2026 protocol name themselves in every request.
+      noteClient(ctx.mcpReq.envelope?.[CLIENT_INFO_META_KEY]?.name ?? null)
+      return trackCall(() => run(args as z.infer<S>))
+    })
   }
 
   const none = z.object({})

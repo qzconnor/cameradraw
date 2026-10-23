@@ -6,13 +6,22 @@ export const MCP_PORT = 39731
 
 export const mcpUrl = (port = MCP_PORT): string => `http://127.0.0.1:${port}/mcp`
 
-export function mcpState(page: Page): Promise<string> {
+interface Status {
+  state: string
+  transport: string
+}
+
+function mcpStatus(page: Page): Promise<Status> {
   return page.evaluate(() =>
-    (window as unknown as { api: { mcp: { status(): Promise<{ state: string }> } } }).api.mcp
-      .status()
-      .then((s) => s.state)
+    (window as unknown as { api: { mcp: { status(): Promise<Status> } } }).api.mcp.status()
   )
 }
+
+export const mcpState = (page: Page): Promise<string> => mcpStatus(page).then((s) => s.state)
+
+/** `http running`, `stdio starting`, … */
+export const mcpMode = (page: Page): Promise<string> =>
+  mcpStatus(page).then((s) => `${s.transport} ${s.state}`)
 
 export async function waitForMcp(page: Page): Promise<void> {
   await expect.poll(() => mcpState(page)).toBe('running')

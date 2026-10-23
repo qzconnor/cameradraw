@@ -71,11 +71,11 @@ async function copyUrl(): Promise<void> {
         }}
       </ItemTitle>
       <ItemDescription v-if="mcp.status?.state === 'running'" class="truncate font-mono">
-        {{ mcp.status.url }}
+        {{ mcp.status.transport === 'stdio' ? 'stdio · cameradraw --mcp' : mcp.status.url }}
       </ItemDescription>
       <ItemDescription v-if="description">{{ description }}</ItemDescription>
     </ItemContent>
-    <ItemActions v-if="mcp.status?.state === 'running'">
+    <ItemActions v-if="mcp.status?.state === 'running' && mcp.status.transport === 'http'">
       <HintTooltip :label="copied ? 'Kopiert' : 'Adresse kopieren'">
         <Button variant="outline" size="icon-sm" aria-label="Adresse kopieren" @click="copyUrl">
           <CheckIcon v-if="copied" />

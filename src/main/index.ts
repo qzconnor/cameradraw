@@ -8,6 +8,7 @@ import { handleMediaProtocol, registerMediaScheme } from './protocol'
 import { startButtonService } from './buttons'
 import { registerIpc, restartLibraryWatcher } from './ipc'
 import { applyMcpSettings } from './mcp/server'
+import { isStdioRelay, runStdioRelay } from './mcp/stdio'
 import { startUpdater } from './updater'
 import { loadWindowState, trackWindowState } from './window-state'
 
@@ -125,10 +126,13 @@ function start(): void {
   })
 }
 
+// Started by an MCP client (`cameradraw.exe --mcp`): no window, only the connection to the app.
 // The installed app runs once: a second start would find the camera busy and run its own updater
 // and folder watcher, so it quits and brings the open window to the front instead. Not during
 // development – the lock is per profile, and `npm run dev` shares it with the installed app.
-if (!app.isPackaged || app.requestSingleInstanceLock()) {
+if (isStdioRelay()) {
+  runStdioRelay()
+} else if (!app.isPackaged || app.requestSingleInstanceLock()) {
   app.on('second-instance', () => {
     const win = BrowserWindow.getAllWindows()[0]
     if (win) bringToFront(win)

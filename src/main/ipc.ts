@@ -1,5 +1,5 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, nativeImage, shell } from 'electron'
-import { isValidMcpPort } from '@shared/mcp'
+import { isMcpTransport, isValidMcpPort } from '@shared/mcp'
 import { IPC, type AppSettings, type CameraScale, type SaveImageRequest } from '@shared/types'
 import { registerButtonIpc } from './buttons'
 import { listSystemCameras } from './cameras'
@@ -87,6 +87,7 @@ function sanitizePatch(patch: unknown): Partial<AppSettings> {
   if (typeof p.preferCameraZoom === 'boolean') out.preferCameraZoom = p.preferCameraZoom
   if (typeof p.stopCameraWhenHidden === 'boolean') out.stopCameraWhenHidden = p.stopCameraWhenHidden
   if (typeof p.mcpEnabled === 'boolean') out.mcpEnabled = p.mcpEnabled
+  if (isMcpTransport(p.mcpTransport)) out.mcpTransport = p.mcpTransport
   if (isValidMcpPort(p.mcpPort)) out.mcpPort = p.mcpPort
   if (isStringArray(p.disabledModules)) out.disabledModules = p.disabledModules.slice(0, 100)
   if (isStringRecord(p.cameraModules)) out.cameraModules = p.cameraModules
@@ -112,7 +113,9 @@ export function registerIpc(): void {
     const before = getSettings().saveDir
     await updateSettings(clean)
     if (getSettings().saveDir !== before) restartLibraryWatcher()
-    if (clean.mcpEnabled !== undefined || clean.mcpPort !== undefined) void applyMcpSettings()
+    if (['mcpEnabled', 'mcpTransport', 'mcpPort'].some((key) => key in clean)) {
+      void applyMcpSettings()
+    }
     return getAppState()
   })
 

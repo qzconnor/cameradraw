@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { refAutoReset, useLocalStorage } from '@vueuse/core'
 import { CheckIcon, CopyIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
-import { MCP_SERVER_NAME, type McpStdioCommand } from '@shared/mcp'
+import { MCP_SERVER_NAME, type McpStdioCommand, type McpTransport } from '@shared/mcp'
 import { FieldDescription } from '@/components/ui/field'
 import {
   InputGroup,
@@ -14,8 +14,6 @@ import {
 } from '@/components/ui/input-group'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { errorMessage } from '@/lib/format'
-
-export type McpTransport = 'http' | 'stdio'
 
 /** How to connect an MCP client – a snippet per client and connection type, ready to copy. */
 const props = defineProps<{
@@ -69,29 +67,22 @@ const httpClients = computed<ClientSetup[]>(() => [
 ])
 
 const stdioClients = computed<ClientSetup[]>(() => {
-  const { command, args, env } = props.stdio
-  const server = { command, args, env }
-  const envFlags = Object.entries(env).map(([key, value]) => `--env ${key}=${value}`)
+  const { command, args } = props.stdio
+  const server = { command, args }
   return [
     {
       id: 'claude-desktop',
       label: 'Claude Desktop',
       place: 'claude_desktop_config.json',
-      hint: 'In Claude unter Einstellungen → Entwickler → „Konfiguration bearbeiten“ bei „mcpServers“ eintragen und Claude neu starten. CameraDraw muss laufen, wenn Claude startet.',
+      hint: 'In Claude unter Einstellungen → Entwickler → „Konfiguration bearbeiten“ bei „mcpServers“ eintragen und Claude neu starten. CameraDraw sollte dann schon laufen.',
       code: json({ mcpServers: { [MCP_SERVER_NAME]: server } })
     },
     {
       id: 'claude-code',
       label: 'Claude Code',
       place: 'Terminal',
-      hint: 'Einmal im Terminal ausführen. Mit HTTP geht es bei Claude Code auch ohne Brücke.',
-      code: [
-        'claude mcp add --transport stdio',
-        ...envFlags,
-        MCP_SERVER_NAME,
-        '--',
-        ...[command, ...args].map(quote)
-      ].join(' ')
+      hint: 'Einmal im Terminal ausführen. Mit --scope user gilt es in allen Projekten, sonst nur im aktuellen.',
+      code: ['claude mcp add', MCP_SERVER_NAME, '--', ...[command, ...args].map(quote)].join(' ')
     },
     {
       id: 'vscode',

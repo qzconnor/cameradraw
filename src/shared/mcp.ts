@@ -18,21 +18,28 @@ export const isValidMcpPort = (port: unknown): port is number =>
   typeof port === 'number' && Number.isInteger(port) && port >= 1024 && port <= 65535
 
 /**
- * How a client that can only start programs (e.g. Claude Desktop) connects: CameraDraw's own
- * executable runs a small bridge (`resources/mcp-stdio.cjs`) as Node that talks to the server.
+ * `http`: clients connect to the address (a port on 127.0.0.1) · `stdio`: clients start
+ * `cameradraw.exe --mcp`, which talks to the running app over a local pipe – no network port.
  */
+export type McpTransport = 'http' | 'stdio'
+
+export const isMcpTransport = (value: unknown): value is McpTransport =>
+  value === 'http' || value === 'stdio'
+
+/** The program an MCP client starts for stdio – this app's executable. */
 export interface McpStdioCommand {
   command: string
   args: string[]
-  env: Record<string, string>
 }
 
 export interface McpStatus {
   /** `off`: switched off in the settings · `error`: could not start, e.g. the port is taken. */
   state: 'off' | 'starting' | 'running' | 'error'
+  transport: McpTransport
   port: number
-  /** Endpoint for MCP clients. */
+  /** Endpoint for MCP clients (`http`). */
   url: string
+  /** What a client starts (`stdio`). */
   stdio: McpStdioCommand
   error: string | null
   /** The client that connected last (its name from the handshake) and when (ms since epoch). */

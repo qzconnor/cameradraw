@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useLocalStorage } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { isValidMcpPort, mcpUrl } from '@shared/mcp'
+import { isMcpTransport, isValidMcpPort, mcpUrl, type McpTransport } from '@shared/mcp'
 import {
   Field,
   FieldContent,
@@ -16,7 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { errorMessage } from '@/lib/format'
 import { useMcpStore } from '@/stores/mcp'
 import { useSettingsStore } from '@/stores/settings'
-import McpSetupGuide, { type McpTransport } from './McpSetupGuide.vue'
+import McpSetupGuide from './McpSetupGuide.vue'
 import McpStatusItem from './McpStatusItem.vue'
 
 /** Settings of the MCP server (off by default) and how to connect a client to it. */
@@ -48,13 +47,10 @@ function applyPort(): void {
 
 const url = computed(() => mcp.status?.url ?? mcpUrl(settings.mcpPort))
 
-/** HTTP for clients that connect to an address, stdio for those that only start programs. */
-const transport = useLocalStorage<McpTransport>('cameradraw.mcp.transport', 'http')
-
 const TRANSPORT_HINTS: Record<McpTransport, string> = {
-  http: 'Der Client verbindet sich direkt mit CameraDraw – für Claude Code, VS Code, Cursor und die meisten anderen.',
+  http: 'Der Client verbindet sich mit einer Adresse auf diesem Rechner – für Claude Code, VS Code, Cursor und die meisten anderen.',
   stdio:
-    'Der Client startet eine kleine Brücke aus CameraDraw – für Claude Desktop und Clients, die nur Programme starten.'
+    'Der Client startet CameraDraw selbst als Programm – für Claude Desktop und alle Clients, die Programme starten. Ohne Netzwerk-Port.'
 }
 
 /** Segments look like the client tabs below: a rounded pill, the picked one raised. */
@@ -63,7 +59,9 @@ const SEGMENT =
 
 function pickTransport(value: unknown): void {
   // Clicking the active item would deselect it – one of them is always picked.
-  if (value === 'http' || value === 'stdio') transport.value = value
+  if (isMcpTransport(value) && value !== settings.mcpTransport) {
+    void update({ mcpTransport: value })
+  }
 }
 </script>
 
@@ -86,9 +84,32 @@ function pickTransport(value: unknown): void {
   </Field>
 
   <template v-if="settings.mcpEnabled">
+    <Field orientation="horizontal">
+      <FieldContent>
+        <FieldLabel>Verbindung</FieldLabel>
+        <FieldDescription>{{ TRANSPORT_HINTS[settings.mcpTransport] }}</FieldDescription>
+      </FieldContent>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        :spacing="0.5"
+        class="self-center bg-muted p-0.75"
+        aria-label="Verbindung"
+        :model-value="settings.mcpTransport"
+        @update:model-value="pickTransport"
+      >
+        <ToggleGroupItem value="http" :class="SEGMENT">HTTP</ToggleGroupItem>
+        <ToggleGroupItem value="stdio" :class="SEGMENT">stdio</ToggleGroupItem>
+      </ToggleGroup>
+    </Field>
+
     <McpStatusItem />
 
-    <Field orientation="horizontal" :data-invalid="!!portProblem || undefined">
+    <Field
+      v-if="settings.mcpTransport === 'http'"
+      orientation="horizontal"
+      :data-invalid="!!portProblem || undefined"
+    >
       <FieldContent>
         <FieldLabel for="settings-mcp-port">Port</FieldLabel>
         <FieldError v-if="portProblem">{{ portProblem }}</FieldError>
@@ -108,32 +129,13 @@ function pickTransport(value: unknown): void {
       />
     </Field>
 
-    <Field orientation="horizontal">
-      <FieldContent>
-        <FieldLabel>Verbindung</FieldLabel>
-        <FieldDescription>{{ TRANSPORT_HINTS[transport] }}</FieldDescription>
-      </FieldContent>
-      <ToggleGroup
-        type="single"
-        size="sm"
-        :spacing="0.5"
-        class="self-center bg-muted p-0.75"
-        aria-label="Verbindung"
-        :model-value="transport"
-        @update:model-value="pickTransport"
-      >
-        <ToggleGroupItem value="http" :class="SEGMENT">HTTP</ToggleGroupItem>
-        <ToggleGroupItem value="stdio" :class="SEGMENT">stdio</ToggleGroupItem>
-      </ToggleGroup>
-    </Field>
-
     <Field v-if="mcp.status">
       <FieldLabel>Einrichten</FieldLabel>
       <FieldDescription>
         Den Server einmal im KI-Assistenten eintragen – solange CameraDraw läuft und die Steuerung
         an ist, kann er die App bedienen.
       </FieldDescription>
-      <McpSetupGuide :transport="transport" :url="url" :stdio="mcp.status.stdio" />
+      <McpSetupGuide :transport="settings.mcpTransport" :url="url" :stdio="mcp.status.stdio" />
     </Field>
   </template>
 </template>

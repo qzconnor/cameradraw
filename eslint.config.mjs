@@ -47,13 +47,5 @@ export default defineConfig(
       ]
     }
   },
-  {
-    // Plain Node scripts shipped as they are (e.g. the MCP stdio bridge): no types, CommonJS.
-    files: ['resources/**/*.cjs'],
-    rules: {
-      '@typescript-eslint/no-require-imports': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off'
-    }
-  },
   eslintConfigPrettier
 )

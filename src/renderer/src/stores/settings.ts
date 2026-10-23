@@ -19,6 +19,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const cameraModules = computed(() => settings.value?.cameraModules ?? {})
   const cameraScales = computed(() => settings.value?.cameraScales ?? {})
   const mcpEnabled = computed(() => settings.value?.mcpEnabled ?? false)
+  const mcpTransport = computed(() => settings.value?.mcpTransport ?? 'http')
   const mcpPort = computed(() => settings.value?.mcpPort ?? DEFAULT_MCP_PORT)
 
   function apply(state: AppState): void {
@@ -55,6 +56,7 @@ export const useSettingsStore = defineStore('settings', () => {
     cameraModules,
     cameraScales,
     mcpEnabled,
+    mcpTransport,
     mcpPort,
     load,
     update

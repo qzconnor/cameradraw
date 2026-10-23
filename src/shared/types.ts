@@ -1,3 +1,5 @@
+import type { McpTransport } from './mcp'
+
 /** Persisted application settings (stored as JSON in the userData folder). */
 export interface AppSettings {
   /** Folder where all drawings are saved. Must be chosen on first start. */
@@ -25,7 +27,9 @@ export interface AppSettings {
   cameraScales: Record<string, CameraScale>
   /** Let AI assistants control the app through the MCP server (see `shared/mcp.ts`). */
   mcpEnabled: boolean
-  /** Port of the MCP server on 127.0.0.1. */
+  /** How MCP clients connect, see `McpTransport`. */
+  mcpTransport: McpTransport
+  /** Port of the MCP server on 127.0.0.1 (`http`). */
   mcpPort: number
 }
 

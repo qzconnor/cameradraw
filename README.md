@@ -153,21 +153,34 @@ KI-Assistent die laufende App bedienen – alles passiert sichtbar im Fenster, s
 klicken: Kamera wählen und pausieren, Bild anhalten oder direkt speichern, Bilder in der Galerie
 suchen, öffnen, umbenennen und verschieben, im Editor zeichnen, messen, ändern und speichern.
 
-**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Darunter stehen Status, Port und
-unter **Verbindung** die Einrichtung zum Kopieren:
+**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Unter **Verbindung** wählst du, wie
+Clients sich verbinden; darunter stehen Status und die Einrichtung pro Client zum Kopieren:
 
-- **HTTP** – der Client verbindet sich direkt mit der Adresse: Claude Code, VS Code, Cursor und die
-  meisten anderen. Für Claude Code:
+- **HTTP** – der Client verbindet sich mit einer Adresse auf diesem Rechner (Port änderbar): Claude
+  Code, VS Code, Cursor und die meisten anderen. Für Claude Code:
 
   ```bash
   claude mcp add --transport http cameradraw http://127.0.0.1:3729/mcp
   ```
 
-- **stdio** – für Clients, die nur Programme starten, vor allem **Claude Desktop**
-  (`claude_desktop_config.json` kennt keine Adressen). Der Client startet dann eine kleine Brücke
-  (`resources/mcp-stdio.cjs`), die die CameraDraw-Programmdatei selbst als Node ausführt
-  (`ELECTRON_RUN_AS_NODE=1`) – es muss nichts installiert werden. Der Eintrag in der App enthält die
-  Pfade dieser Installation; CameraDraw muss laufen, wenn der Client startet.
+- **stdio** – der Client startet CameraDraw selbst mit `--mcp`, z. B. **Claude Desktop**
+  (`claude_desktop_config.json` kennt keine Adressen):
+
+  ```json
+  {
+    "mcpServers": {
+      "cameradraw": {
+        "command": "C:\\Users\\<Name>\\AppData\\Local\\Programs\\cameradraw\\cameradraw.exe",
+        "args": ["--mcp"]
+      }
+    }
+  }
+  ```
+
+  Dieser Prozess öffnet kein Fenster: Er reicht stdin/stdout über eine lokale Named Pipe an die
+  laufende App weiter. Es wird kein Netzwerk-Port geöffnet. CameraDraw sollte laufen, wenn der Client
+  startet. Der Eintrag in der App enthält den Pfad der laufenden Version (in der Entwicklung die
+  Electron-Datei aus `node_modules` mit dem Projektordner).
 
 Solange der Server an ist, zeigt die Titelleiste ein Roboter-Symbol; ein grüner Punkt daran heißt,
 dass ein Assistent gerade etwas tut.
@@ -183,13 +196,16 @@ dass ein Assistent gerade etwas tut.
 - Koordinaten im Editor sind Bildpixel; gezeichnete Objekte haben einen Index in der
   Stapelreihenfolge (`editor_state`). Ungespeicherte Änderungen verwirft ein Tool nur mit
   `discard: true`.
-- Der Server lauscht nur auf `127.0.0.1` (Standard-Port 3729, änderbar) und verlangt keine
-  Anmeldung – jedes Programm auf dem Rechner kann ihn nutzen, solange er an ist. Anfragen von
-  Webseiten (fremder `Origin`/`Host`) lehnt er ab.
-- Technik: Streamable HTTP mit dem offiziellen SDK (`@modelcontextprotocol/server`), auch für Clients
-  mit dem Protokoll von 2025. Der Server sitzt im Main-Prozess (`src/main/mcp/`) und schickt jede
-  Aktion per IPC an die Oberfläche (`src/renderer/src/mcp/`), die sie über dieselben Stores und
-  Komponenten ausführt wie ein Klick.
+- Erreichbar ist der Server nur auf diesem Rechner – per HTTP auf `127.0.0.1` (Standard-Port 3729),
+  per stdio über eine Pipe pro Benutzer. Eine Anmeldung gibt es nicht: Jedes Programm des Benutzers
+  kann ihn nutzen, solange er an ist. HTTP-Anfragen von Webseiten (fremder `Origin`/`Host`) lehnt er
+  ab.
+- Technik: offizielles SDK (`@modelcontextprotocol/server`), auch für Clients mit dem Protokoll von 2025. Der Server sitzt im Main-Prozess (`src/main/mcp/`) und schickt jede Aktion per IPC an die
+  Oberfläche (`src/renderer/src/mcp/`), die sie über dieselben Stores und Komponenten ausführt wie
+  ein Klick. Electron schreibt unter Windows beim Start eine Leerzeile auf stdout; Clients mit dem
+  TypeScript-SDK v1 melden sie einmal als Fehler und arbeiten normal weiter. Die installierte App
+  ignoriert `ELECTRON_RUN_AS_NODE` (Fuse `runAsNode` aus), damit `--mcp` immer als CameraDraw
+  startet.
 
 ## Speicherordner und Projekte
 
