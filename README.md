@@ -44,13 +44,26 @@ die auch später noch Form für Form bearbeitbar bleiben.
   samt Größe, am Fensterrand zoomt die Ansicht heraus, `Shift` rastet in Vierteln des Bildes ein.
   Klick oder Rechtsklick auf die Kante fragt nach der genauen Breite in Pixeln und der Farbe.
   Gezeichnete Formen wandern mit; alles lässt sich rückgängig machen, das Original bleibt erhalten.
+- **Ebenen** – Unten links stehen die Ebenen des Bildes: das Bild selbst, angefügte Flächen und
+  Zeichnungsebenen mit den Formen. Ein Klick wählt die Ebene, in die gezeichnet wird; Auge und
+  Schloss blenden aus und sperren, Ziehen (oder `Alt+↑`/`↓`) ordnet um, Doppelklick benennt um.
+  Ebenen lassen sich kopieren und einfügen (auch in ein anderes Bild), duplizieren und löschen –
+  mit den Knöpfen unter der Liste, per Rechtsklick oder mit den Tasten, solange die Liste den Fokus
+  hat. Das Zuschneiden gehört zur Bildebene: Auch nachdem eine Fläche angefügt und beschriftet ist,
+  lässt sich das Bild noch zuschneiden – Fläche und Notizen rücken mit. Ein zweites Zuschneiden
+  zeigt die Ecken des ersten, sie lassen sich einfach nachziehen.
+- **Mehrere Bilder in einem** – Ein Bild aus der Galerie auf das Bild im Editor ziehen fügt es als
+  eigene Ebene ein (verschieben und an den Ecken skalieren mit dem Auswahlwerkzeug). Ein Doppelklick
+  auf ein Bild zeigt es allein: drehen, zuschneiden, „Übernehmen“ – und es sitzt wieder an seinem
+  Platz.
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
   füllen, kopieren, duplizieren, nach vorne oder hinten legen, löschen, alles auswählen.
 - **Formen kopieren** – `Strg+C` / `Strg+V` / `Strg+D`, auch von einem Bild ins nächste (Messlinien
   zeigen dort die Länge im Maßstab des neuen Bildes). Die Pfeiltasten schieben die Auswahl
   pixelgenau.
-- **Bleibt bearbeitbar** – Neben jedem Bild liegen das Original und die Zeichnung als Ebenen. Wer
-  ein Bild wieder öffnet, kann jede Form und jeden Text einzeln verschieben, ändern oder löschen.
+- **Bleibt bearbeitbar** – Neben jedem Bild liegen das Original und alle Ebenen. Wer ein Bild wieder
+  öffnet, kann jede Form und jeden Text einzeln verschieben, ändern oder löschen und jedes Bild neu
+  zuschneiden.
 - **Projekte** – Beim Speichern fragt CameraDraw nach Dateiname und Projekt (oder „Kein Projekt“).
   Das zuletzt gewählte Projekt ist beim nächsten Bild schon ausgewählt. Ein gespeichertes Bild
   speichert `Strg+S` direkt, „Speichern unter …“ legt es auf Wunsch als Kopie an.
@@ -125,6 +138,8 @@ später in den Einstellungen ändern.
 | Bildkante ziehen     | Fläche anfügen (`Shift` = Viertel des Bildes, `Esc` bricht ab)         |
 | Klick auf Bildkante  | Fläche anfügen mit Breite in Pixeln oder %, Farbe (auch Rechtsklick)   |
 | Rechtsklick          | Text / Kopiertes hier einfügen, Kopieren, Duplizieren, Füllen, Löschen |
+| Doppelklick auf Bild | Das Bild allein bearbeiten: drehen, `C` zuschneiden, `Enter` übernimmt |
+| Ebenen-Liste         | `↑`/`↓` wählen, `Alt+↑`/`↓` verschieben, `F2`, `Entf`, `Strg+C/V/D`    |
 | `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
 | `Strg+B` / `Strg+I`  | Beim Schreiben: Auswahl fett / kursiv (Markdown)                       |
 | `Strg+C` / `Strg+X`  | Auswahl kopieren / ausschneiden                                        |
@@ -145,6 +160,7 @@ später in den Einstellungen ändern.
 | Taste / Geste           | Aktion                                                                               |
 | ----------------------- | ------------------------------------------------------------------------------------ |
 | Bild auf Projekt ziehen | Bild in das Projekt verschieben (mit „Rückgängig“ im Hinweis)                        |
+| Bild in den Editor      | Bild als eigene Ebene in das Bild im Editor einfügen                                 |
 | `F2`                    | Bild oder Projekt umbenennen                                                         |
 | Rechtsklick / `…`       | Bearbeiten, Bild kopieren, Umbenennen, Verschieben nach …, Im Ordner zeigen, Löschen |
 | `Esc`                   | Ziehen abbrechen, Suche leeren, Galerie schließen                                    |
@@ -204,16 +220,24 @@ Texte schreibt ein Assistent in Markdown (`editor_draw` mit `type: "text"`, `edi
 einen Befund mit Überschrift, Aufgabenliste und Messwert-Tabelle auf einer mit `editor_extend`
 angefügten Fläche. `editor_state` liefert den Quelltext und die Größe des formatierten Texts.
 
+Ein Assistent zeichnet in eigene Ebenen (in der Liste mit Roboter-Symbol), nicht in die des
+Benutzers: `editor_draw` ohne `layer` nimmt die zuletzt benutzte eigene, beim ersten Mal eine neue
+mit dem Namen des Clients. Mit `editor_layers` legt er beliebig viele an (`add`, z. B. „Messungen“
+und „Beschriftung“), wechselt (`use` oder `layer` bei `editor_draw`), benennt um, blendet aus,
+sperrt, verschiebt, kopiert, fügt ein und löscht. `editor_insert_image` holt ein Bild der Galerie
+als Bildebene dazu; `editor_rotate`, `editor_perspective` und `editor_reset_image` wirken mit
+`layer` nur auf diese Bildebene.
+
 In den Einstellungen steht, ob der Server läuft, welcher Client zuletzt verbunden war und ob gerade
 ein Assistent etwas tut.
 
-| Bereich   | Tools                                                                                                                                                                                                                                                                                                                                                |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`                                                                                                                                                                                                                                                                                           |
-| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                                                                                                  |
-| Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                                                                                               |
-| Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_rotate`, `editor_perspective`, `editor_extend`, `editor_reset_image`, `editor_save`, `editor_copy_image`, `editor_close` |
-| Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                                                                                                 |
+| Bereich   | Tools                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`                                                                                                                                                                                                                                                                                                                                   |
+| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                                                                                                                                          |
+| Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                                                                                                                                       |
+| Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_layers`, `editor_insert_image`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_rotate`, `editor_perspective`, `editor_extend`, `editor_reset_image`, `editor_save`, `editor_copy_image`, `editor_close` |
+| Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                                                                                                                                         |
 
 - Koordinaten im Editor sind Bildpixel; gezeichnete Objekte haben einen Index in der
   Stapelreihenfolge (`editor_state`). Ungespeicherte Änderungen verwirft ein Tool nur mit
@@ -248,10 +272,12 @@ Speicherordner/
 ```
 
 - Jedes Bild liegt als PNG im Ordner und lässt sich ganz normal weiterverwenden.
-- Im versteckten Unterordner `.cameradraw/` liegen pro Bild das Originalbild (`*.base.png`) und die
-  Zeichnungs-Ebenen (`*.json`). Gedreht, entzerrt oder erweitert wird nicht das Original: Die
-  Schritte stehen als `adjustments` in der `*.json` und werden beim Öffnen auf das Original
-  angewendet – „Bild › Original wiederherstellen“ nimmt sie auch später noch zurück.
+- Im versteckten Unterordner `.cameradraw/` liegen pro Bild das Originalbild (`*.base.png`), die
+  Ebenen (`*.json`) und – wenn Bilder aus der Galerie eingefügt sind – deren Bilder im Ordner
+  `*.layers/`. Gedreht oder entzerrt wird nicht das Original: Die Schritte stehen bei der Bildebene
+  als `adjustments` in der `*.json` und werden beim Öffnen angewendet – „Original wiederherstellen“
+  nimmt sie auch später noch zurück. Angefügte Flächen sind eigene Ebenen. Dateien älterer Versionen
+  (eine Zeichnung auf dem Bild) öffnen als Bild- und Zeichnungsebene.
 - Das Datum in der Galerie ist das Aufnahmedatum. Es steht in der `*.json` (`capturedAt`) und
   bleibt beim Bearbeiten, Umbenennen, Verschieben, Kopieren und Synchronisieren erhalten. Bilder
   ohne gespeichertes Datum (ältere Versionen, Bilder von außerhalb) bekommen es aus dem
@@ -350,9 +376,10 @@ src/
     stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom), gallery (Projekte,
                      Suche, Sortierung), editor, burst (Serienaufnahme), updates, panels,
                      hardware, modules, mcp
-    composables/     useDrawingCanvas (fabric.js-Canvas, Werkzeuge, Undo/Redo, Export),
-                     useGalleryDrag (Drag & Drop in der Galerie)
-    editor/          Werkzeug-Definitionen, Formen, Markdown-Text (markdown.ts), History
+    composables/     useDrawingCanvas (fabric.js-Canvas, Ebenen, Werkzeuge, Undo/Redo, Export),
+                     useGalleryDrag (Drag & Drop in der Galerie und in den Editor)
+    editor/          Werkzeug-Definitionen, Formen, Markdown-Text (markdown.ts), Ebenen
+                     (layers.ts), Bild-Anpassungen (adjust.ts), History
     lib/             gallery.ts (Filtern und Sortieren), Bild- und Kamera-Hilfen
     modules/         Geräte-Module – eine Datei pro Gerätetyp, Liste in index.ts
     mcp/             Aktionen der KI-Steuerung (actions.ts) und was Kamera und Editor dafür

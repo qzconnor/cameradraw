@@ -22,6 +22,7 @@ const api: CameraDrawApi = {
     reveal: (path) => ipcRenderer.invoke(IPC.libraryReveal, path),
     openFolder: () => ipcRenderer.invoke(IPC.libraryOpenFolder),
     copyImage: (path) => ipcRenderer.invoke(IPC.libraryCopyImage, path),
+    readImage: (path) => ipcRenderer.invoke(IPC.libraryReadImage, path),
     createProject: (name) => ipcRenderer.invoke(IPC.libraryCreateProject, name),
     renameProject: (from, to) => ipcRenderer.invoke(IPC.libraryRenameProject, from, to),
     removeProject: (name) => ipcRenderer.invoke(IPC.libraryRemoveProject, name),

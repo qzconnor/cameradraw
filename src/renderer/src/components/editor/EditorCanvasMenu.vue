@@ -6,6 +6,7 @@ import {
   ClipboardPasteIcon,
   CopyIcon,
   CopyPlusIcon,
+  CropIcon,
   PaintBucketIcon,
   RulerIcon,
   SendToBackIcon,
@@ -31,8 +32,8 @@ const props = defineProps<{
   spot: CanvasSpot | null
   /** There are objects to select. */
   canSelectAll: boolean
-  /** Objects were copied and can be pasted. */
-  canPaste: boolean
+  /** What was copied and can be pasted: objects (at the clicked point) or layers. */
+  pasteKind: 'objects' | 'layers' | null
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +48,8 @@ const emit = defineEmits<{
   /** Paste the copied objects at the clicked point. */
   paste: []
   arrange: [where: 'front' | 'back']
+  /** Edit the image under the pointer on its own. */
+  editImage: []
 }>()
 
 const hasObjects = computed(() => !!props.spot?.objects.length)
@@ -66,10 +69,18 @@ const several = computed(() => (props.spot?.objects.length ?? 0) > 1)
           <TypeIcon />
           Text hier einfügen
         </ContextMenuItem>
-        <ContextMenuItem v-if="canPaste" :disabled="!spot?.onImage" @select="emit('paste')">
+        <ContextMenuItem
+          v-if="pasteKind"
+          :disabled="pasteKind === 'objects' && !spot?.onImage"
+          @select="emit('paste')"
+        >
           <ClipboardPasteIcon />
-          Hier einfügen
+          {{ pasteKind === 'layers' ? 'Ebene einfügen' : 'Hier einfügen' }}
           <ContextMenuShortcut>Strg V</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem v-if="spot?.image" @select="emit('editImage')">
+          <CropIcon />
+          Bild bearbeiten …
         </ContextMenuItem>
       </ContextMenuGroup>
 

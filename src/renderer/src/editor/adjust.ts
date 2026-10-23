@@ -306,3 +306,62 @@ export const renderAll = (
   original: HTMLCanvasElement,
   adjustments: ImageAdjustment[]
 ): HTMLCanvasElement => adjustments.reduce(render, original)
+
+// ── Changing the adjustments of a picture ─────────────────────────────────────
+
+const sameStep = (a: ImageAdjustment, b: ImageAdjustment): boolean =>
+  JSON.stringify(a) === JSON.stringify(b)
+
+/** How many steps `a` and `b` share at their start. */
+function sharedSteps(a: ImageAdjustment[], b: ImageAdjustment[]): number {
+  let shared = 0
+  while (shared < a.length && shared < b.length && sameStep(a[shared], b[shared])) shared++
+  return shared
+}
+
+/**
+ * Where a point of the picture with the adjustments `from` (of a source of size `source`) lies in
+ * the picture with the adjustments `to` – back through the steps only `from` has, forwards through
+ * those only `to` has.
+ */
+export function changeMapper(
+  source: Size,
+  from: ImageAdjustment[],
+  to: ImageAdjustment[]
+): (p: ImagePoint) => ImagePoint {
+  const shared = sharedSteps(from, to)
+  const start = sizeAfterAll(source, from.slice(0, shared))
+  const back: ((p: ImagePoint) => ImagePoint)[] = []
+  let size = start
+  for (const step of from.slice(shared)) {
+    back.unshift(pointMapper(size, step, true))
+    size = sizeAfter(size, step)
+  }
+  const forth: ((p: ImagePoint) => ImagePoint)[] = []
+  size = start
+  for (const step of to.slice(shared)) {
+    forth.push(pointMapper(size, step))
+    size = sizeAfter(size, step)
+  }
+  return (p) =>
+    forth.reduce(
+      (q, map) => map(q),
+      back.reduce((q, map) => map(q), p)
+    )
+}
+
+/** How far the picture turns between the adjustments `from` and `to` (degrees, clockwise). */
+export function turnBetween(from: ImageAdjustment[], to: ImageAdjustment[]): number {
+  const shared = sharedSteps(from, to)
+  const turns = (list: ImageAdjustment[]): number =>
+    list.slice(shared).reduce((sum, step) => sum + turnOf(step), 0)
+  return (((turns(to) - turns(from)) % 360) + 360) % 360
+}
+
+/** `list` turned by quarter turns more – merged into a last turn, which drops out at a full one. */
+export function withTurn(list: ImageAdjustment[], turns: number): ImageAdjustment[] {
+  const last = list[list.length - 1]
+  const before = last?.type === 'rotate' ? list.slice(0, -1) : list
+  const total = (((turns + (last?.type === 'rotate' ? last.turns : 0)) % 4) + 4) % 4
+  return total ? [...before, { type: 'rotate', turns: total as 1 | 2 | 3 }] : before
+}

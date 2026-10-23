@@ -3,10 +3,12 @@ import { createEventHook, createSharedComposable, useRafFn } from '@vueuse/core'
 import type { GalleryItem } from '@shared/types'
 
 /**
- * Dragging gallery images onto projects (pointer events, so the card can be animated freely).
+ * Dragging gallery images onto projects, or into the picture in the editor (pointer events, so
+ * the card can be animated freely).
  *
  * Drop targets are elements with `data-drop-project`: the project name, or an empty string for
- * "Kein Projekt" (directly in the save folder). While the pointer is over an element with
+ * "Kein Projekt" (directly in the save folder) – and the editor's drawing area while it takes
+ * pictures, marked `data-drop-editor`. While the pointer is over an element with
  * `data-drag-dock`, the list does not scroll.
  */
 
@@ -24,6 +26,10 @@ export interface GalleryDrag {
 /** `drop` / `cancel`: the ghost is animating into the target / back to the card. */
 export type DragPhase = 'drag' | 'drop' | 'cancel'
 
+/** Where an image was dropped: on a project (null: "Kein Projekt"), or into the editor's picture. */
+export type DropTarget =
+  { kind: 'project'; project: string | null } | { kind: 'editor'; client: { x: number; y: number } }
+
 const THRESHOLD = 6 // px the pointer has to move before a press becomes a drag
 const EDGE = 56 // px at the list's top and bottom edge that scroll it
 const MAX_SCROLL = 18 // px per frame
@@ -35,12 +41,14 @@ export const useGalleryDrag = createSharedComposable(() => {
   const phase = ref<DragPhase>('drag')
   /** Drop target under the pointer: a project name, '' for "Kein Projekt", null for none. */
   const over = ref<string | null>(null)
+  /** The pointer is over the editor's picture, which takes the image as a layer. */
+  const overEditor = ref(false)
   /** Last successful drop – the target plays a short "received" animation. */
   const landing = ref<{ project: string | null; at: number } | null>(null)
   /** Pointer position – not reactive, the ghost reads it every frame. */
   const pointer = { x: 0, y: 0 }
 
-  const dropped = createEventHook<{ item: GalleryItem; project: string | null }>()
+  const dropped = createEventHook<{ item: GalleryItem; target: DropTarget }>()
 
   let target: HTMLElement | null = null
   let overDock = false
@@ -52,15 +60,28 @@ export const useGalleryDrag = createSharedComposable(() => {
     !!active.value && projectKey(active.value.item.project) !== projectKey(project)
   const isOver = (project: string | null): boolean => over.value === projectKey(project)
   const isDragged = (path: string): boolean => active.value?.item.path === path
-  /** Current screen position of the target under the pointer. */
-  const targetRect = (): DOMRect | null => target?.getBoundingClientRect() ?? null
+  /** Size of the spot in the editor the ghost shrinks into. */
+  const EDITOR_SPOT = 48
+
+  /** Current screen position of the target under the pointer (in the editor: the pointer). */
+  const targetRect = (): DOMRect | null =>
+    overEditor.value
+      ? new DOMRect(
+          pointer.x - EDITOR_SPOT / 2,
+          pointer.y - EDITOR_SPOT / 2,
+          EDITOR_SPOT,
+          EDITOR_SPOT
+        )
+      : (target?.getBoundingClientRect() ?? null)
 
   function updateTarget(): void {
     const el = document.elementFromPoint(pointer.x, pointer.y)
+    const editor = el?.closest<HTMLElement>('[data-drop-editor]') ?? null
     const found = el?.closest<HTMLElement>('[data-drop-project]') ?? null
     const project = found?.dataset.dropProject
-    const valid = project !== undefined && canDrop(project || null)
-    target = valid ? found : null
+    const valid = !editor && project !== undefined && canDrop(project || null)
+    target = editor ?? (valid ? found : null)
+    overEditor.value = !!editor
     over.value = valid ? project : null
     overDock = !!el?.closest('[data-drag-dock]')
   }
@@ -117,11 +138,17 @@ export const useGalleryDrag = createSharedComposable(() => {
     const drag = active.value!
     if (drop && target) {
       phase.value = 'drop'
-      void dropped.trigger({ item: drag.item, project: over.value || null })
+      void dropped.trigger({
+        item: drag.item,
+        target: overEditor.value
+          ? { kind: 'editor', client: { ...pointer } }
+          : { kind: 'project', project: over.value || null }
+      })
     } else {
       phase.value = 'cancel'
       target = null
       over.value = null
+      overEditor.value = false
     }
     // In case the ghost cannot finish its animation.
     fallback = setTimeout(finish, 1000)
@@ -131,11 +158,14 @@ export const useGalleryDrag = createSharedComposable(() => {
   function finish(): void {
     clearTimeout(fallback)
     if (!active.value) return
-    if (phase.value === 'drop') landing.value = { project: over.value || null, at: Date.now() }
+    if (phase.value === 'drop' && !overEditor.value) {
+      landing.value = { project: over.value || null, at: Date.now() }
+    }
     active.value = null
     phase.value = 'drag'
     target = null
     over.value = null
+    overEditor.value = false
     viewport = null
   }
 
@@ -184,6 +214,7 @@ export const useGalleryDrag = createSharedComposable(() => {
     active,
     phase,
     over,
+    overEditor,
     landing,
     pointer,
     press,

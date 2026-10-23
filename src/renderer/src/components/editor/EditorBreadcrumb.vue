@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CameraIcon, FolderIcon, ImagesIcon } from '@lucide/vue'
+import { CameraIcon, FolderIcon, ImageIcon, ImagesIcon } from '@lucide/vue'
 import { splitExtension, splitItemPath } from '@shared/names'
 import HintTooltip from '@/components/common/HintTooltip.vue'
 import {
@@ -19,6 +19,8 @@ import { usePanelsStore } from '@/stores/panels'
 const props = defineProps<{
   /** Path of the image, null for a new capture. */
   path: string | null
+  /** The image layer edited on its own, if one is. */
+  layer?: string | null
 }>()
 
 const gallery = useGalleryStore()
@@ -96,6 +98,15 @@ const linkClass =
             <span class="truncate">Neue Aufnahme</span>
           </BreadcrumbPage>
         </BreadcrumbItem>
+        <template v-if="layer">
+          <BreadcrumbSeparator />
+          <BreadcrumbItem class="max-w-1/2 min-w-0 shrink-0">
+            <BreadcrumbPage class="flex min-w-0 items-center gap-1.5">
+              <ImageIcon class="size-3.5 shrink-0" />
+              <span class="truncate">{{ layer }}</span>
+            </BreadcrumbPage>
+          </BreadcrumbItem>
+        </template>
       </BreadcrumbList>
     </Breadcrumb>
   </div>

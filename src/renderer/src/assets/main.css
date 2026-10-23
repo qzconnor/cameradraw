@@ -206,6 +206,11 @@ html[data-dragging] * {
   app-region: no-drag;
 }
 
+/* Where no layer covers the picture it is transparent – shown as the usual checkerboard. */
+@utility checkerboard {
+  background: repeating-conic-gradient(oklch(0.3 0 0) 0 25%, oklch(0.24 0 0) 0 50%) 0 0 / 16px 16px;
+}
+
 /* Acrylic floating panel for everything over the camera image (toolbars, zoom, mirror).
    The side panels (SidePanel.vue) use the same background, blur and saturation. */
 @utility glass-panel {

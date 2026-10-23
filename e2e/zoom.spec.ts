@@ -46,12 +46,15 @@ test('zooming keeps the point under the mouse, panning moves by the dragged dist
   const P = { x: box.x + box.width * 0.55, y: box.y + box.height * 0.45 }
   const atFit = { x: (P.x - box.x) / fit, y: (P.y - box.y) / fit }
 
-  // Wheel at P
+  // Wheel at P. The first step is a big one: while the picture is smaller than the drawing area
+  // in one direction it stays centred there, so only from then on the point keeps its place –
+  // how soon depends on the window (and the layer list beside the picture).
   await page.mouse.move(P.x, P.y)
-  for (let i = 0; i < 5; i++) await page.mouse.wheel(0, -150)
+  await page.mouse.wheel(0, -600)
+  for (let i = 0; i < 2; i++) await page.mouse.wheel(0, -150)
   await expect.poll(() => zoomLabel(page)).toBeGreaterThan(2.5)
   const zoomed = await canvasBox(page)
-  expect(zoomed.width).toBeGreaterThan(box.width)
+  expect(zoomed.width * zoomed.height).toBeGreaterThan(box.width * box.height)
   await rectAt(page, P)
   await quickSave(page)
   const r1 = lastRect(workspace.library)
@@ -124,17 +127,23 @@ test('keys, buttons and limits; the saved image stays whole', async ({ page, wor
   expect(Math.abs(back.width - box.width)).toBeLessThan(2)
 })
 
-test('the zoom control and the action bar fit into the smallest window', async ({ app, page }) => {
+test('the layers, zoom control and action bar fit into the smallest window', async ({
+  app,
+  page
+}) => {
   await openImage(page, 'Probe.png')
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 620))
   await expect.poll(() => page.evaluate(() => innerWidth)).toBeLessThan(1000)
+  // The bar at the bottom: the layer list's button, the zoom and the actions, side by side.
   const panels = await page.$$eval('.glass-panel', (els) =>
     els
       .map((el) => el.getBoundingClientRect())
-      .filter((r) => r.top > innerHeight / 2)
+      .filter((r) => r.top > innerHeight - 80)
       .map((r) => ({ left: r.left, right: r.right }))
       .sort((a, b) => a.left - b.left)
   )
-  expect(panels).toHaveLength(2)
+  expect(panels).toHaveLength(3)
   expect(panels[0].right).toBeLessThanOrEqual(panels[1].left)
+  expect(panels[1].right).toBeLessThanOrEqual(panels[2].left)
+  expect(panels[2].right).toBeLessThanOrEqual(await page.evaluate(() => innerWidth))
 })

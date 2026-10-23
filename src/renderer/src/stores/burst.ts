@@ -4,6 +4,7 @@ import { useLocalStorage } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { captureStem, itemPath, sameName } from '@shared/names'
 import type { CaptureInfo, GalleryItem } from '@shared/types'
+import { layersOf } from '@/editor/layers'
 import type { CapturedFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import { canvasToBytes } from '@/lib/image'
@@ -91,14 +92,13 @@ export const useBurstStore = defineStore('burst', () => {
           target,
           image: bytes,
           base: bytes,
+          // The frame with an empty drawing layer, like a capture saved from the editor.
           document: {
-            version: 1,
-            width: frame.width,
-            height: frame.height,
-            objects: [],
+            ...layersOf(null, { width: frame.width, height: frame.height }),
             micronsPerPixel,
             capture
           },
+          pictures: [],
           capturedAt
         })
         announce(item)

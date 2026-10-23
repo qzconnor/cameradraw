@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, utimesSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { crc32, deflateSync } from 'zlib'
 
@@ -67,16 +67,61 @@ export function addImage(library: string, path: string, options: ImageOptions = 
   return file
 }
 
-/** The layers CameraDraw saved for an image. */
+export interface SavedLayer {
+  id: string
+  type: 'image' | 'fill' | 'drawing'
+  name: string
+  visible: boolean
+  locked: boolean
+  owner?: 'ai'
+  objects?: Record<string, unknown>[]
+  source?: string
+  adjustments?: Record<string, unknown>[]
+  left?: number
+  top?: number
+  scale?: number
+  color?: string
+  width?: number
+  height?: number
+}
+
+/**
+ * The layers CameraDraw saved for an image – with, for short, every drawn object (`objects`, of
+ * all drawing layers, bottom first) and the adjustments of the frame (`adjustments`, missing if it
+ * has none).
+ */
 export function readLayers(
   library: string,
   path: string
 ): Record<string, unknown> & {
+  layers: SavedLayer[]
   objects: Record<string, unknown>[]
+  adjustments?: Record<string, unknown>[]
 } {
   const parts = path.split('/')
   const stem = parts.pop()!.replace(/\.[^.]+$/, '')
-  return JSON.parse(readFileSync(join(library, ...parts, '.cameradraw', `${stem}.json`), 'utf8'))
+  const document = JSON.parse(
+    readFileSync(join(library, ...parts, '.cameradraw', `${stem}.json`), 'utf8')
+  ) as Record<string, unknown> & { layers?: SavedLayer[] }
+  // Written by older versions (or `addImage`) and not saved since: one drawing on the frame.
+  if (!document.layers) {
+    return document as ReturnType<typeof readLayers>
+  }
+  const frame = document.layers.find((l) => l.type === 'image' && l.source === 'base')
+  return {
+    ...document,
+    layers: document.layers,
+    objects: document.layers.flatMap((l) => (l.type === 'drawing' ? (l.objects ?? []) : [])),
+    adjustments: frame?.adjustments?.length ? frame.adjustments : undefined
+  }
+}
+
+/** The pictures of the image layers saved next to an image (file names). */
+export function layerPictures(library: string, path: string): string[] {
+  const parts = path.split('/')
+  const stem = parts.pop()!.replace(/\.[^.]+$/, '')
+  const dir = join(library, ...parts, '.cameradraw', `${stem}.layers`)
+  return existsSync(dir) ? readdirSync(dir).sort() : []
 }
 
 /** Width and height of a PNG file, from its header. */

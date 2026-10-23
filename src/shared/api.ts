@@ -43,6 +43,8 @@ export interface CameraDrawApi {
     openFolder(): Promise<string>
     /** Puts the image (as saved, with its drawing) on the clipboard. */
     copyImage(path: string): Promise<void>
+    /** The image file as saved (with its drawing), e.g. to pull it into another picture. */
+    readImage(path: string): Promise<{ bytes: Uint8Array; mime: string }>
     createProject(name: string): Promise<void>
     renameProject(from: string, to: string): Promise<void>
     /** Moves a project folder with all its images to the trash. */

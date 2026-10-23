@@ -5,10 +5,13 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promis
 import { basename, dirname, extname, join } from 'path'
 import { captureStampTime, itemPath, nameError, splitExtension, splitItemPath } from '@shared/names'
 import {
+  isPictureId,
   MEDIA_SCHEME,
   type EditorDocument,
   type GalleryItem,
   type GalleryProject,
+  type LayerPicture,
+  type LegacyEditorDocument,
   type LibraryListing,
   type LoadedImage,
   type SaveImageRequest
@@ -65,10 +68,18 @@ function assertValidPath(path: string): void {
 const isProjectDir = (name: string): boolean =>
   !name.startsWith('.') && !name.startsWith('$') && name !== 'System Volume Information'
 
-const layerPaths = (file: string): { json: string; base: string } => {
+/**
+ * Where the layers of `file` lie: the JSON, the original frame, and a folder with the pictures of
+ * further image layers (`<id>.png`, only if there are any).
+ */
+const layerPaths = (file: string): { json: string; base: string; pictures: string } => {
   const dir = join(dirname(file), LAYERS_DIR)
   const stem = basename(file, extname(file))
-  return { json: join(dir, `${stem}.json`), base: join(dir, `${stem}.base.png`) }
+  return {
+    json: join(dir, `${stem}.json`),
+    base: join(dir, `${stem}.base.png`),
+    pictures: join(dir, `${stem}.layers`)
+  }
 }
 
 const isTime = (value: unknown): value is number =>
@@ -238,12 +249,53 @@ async function relocate(root: string, from: string, to: string): Promise<void> {
   const [oldLayers, newLayers] = [layerPaths(src), layerPaths(dest)]
   if (existsSync(oldLayers.json) || existsSync(oldLayers.base)) await ensureLayersDir(dirname(dest))
   // Without own layers, leftovers of an earlier image with the same name must not be picked up.
-  const moveOrClear = (a: string, b: string): Promise<void> =>
-    existsSync(a) ? rename(a, b) : rm(b, { force: true })
+  const moveOrClear = async (a: string, b: string): Promise<void> => {
+    // Only the case changes – the same file, which must not be cleared first.
+    if (!isSameFile(a, b)) await rm(b, { recursive: true, force: true })
+    if (existsSync(a)) await rename(a, b)
+  }
   await Promise.all([
     moveOrClear(oldLayers.json, newLayers.json),
-    moveOrClear(oldLayers.base, newLayers.base)
+    moveOrClear(oldLayers.base, newLayers.base),
+    moveOrClear(oldLayers.pictures, newLayers.pictures)
   ])
+}
+
+/** Writes the pictures of the image layers; those of the image not listed any more are removed. */
+async function writePictures(dir: string, pictures: LayerPicture[]): Promise<void> {
+  const valid = pictures.filter((p) => isPictureId(p.id))
+  if (!valid.length) {
+    await rm(dir, { recursive: true, force: true })
+    return
+  }
+  await mkdir(dir, { recursive: true })
+  const keep = new Set(valid.map((p) => `${p.id}.png`))
+  await Promise.all(valid.map((p) => writeAtomic(join(dir, `${p.id}.png`), p.bytes)))
+  const stale = (await readdir(dir)).filter((name) => !keep.has(name))
+  await Promise.all(stale.map((name) => rm(join(dir, name), { force: true })))
+}
+
+/** The pictures the image layers of `document` show (besides the frame). */
+async function readPictures(
+  dir: string,
+  document: EditorDocument | LegacyEditorDocument
+): Promise<LayerPicture[]> {
+  if (document.version !== 2 || !Array.isArray(document.layers)) return []
+  const ids = new Set(
+    document.layers.flatMap((l) =>
+      l.type === 'image' && l.source !== 'base' && isPictureId(l.source) ? [l.source] : []
+    )
+  )
+  const pictures = await Promise.all(
+    [...ids].map(async (id): Promise<LayerPicture | null> => {
+      try {
+        return { id, bytes: new Uint8Array(await readFile(join(dir, `${id}.png`))) }
+      } catch {
+        return null // missing – the layer shows nothing
+      }
+    })
+  )
+  return pictures.filter((p): p is LayerPicture => p !== null)
 }
 
 export async function saveImage(root: string, req: SaveImageRequest): Promise<GalleryItem> {
@@ -261,6 +313,7 @@ export async function saveImage(root: string, req: SaveImageRequest): Promise<Ga
   const layers = layerPaths(file)
   await ensureLayersDir(dirname(file))
   await writeAtomic(layers.base, req.base)
+  await writePictures(layers.pictures, req.pictures ?? [])
   await writeAtomic(layers.json, JSON.stringify({ ...req.document, capturedAt }))
   await writeAtomic(file, req.image)
 
@@ -277,16 +330,25 @@ export async function loadImage(root: string, path: string): Promise<LoadedImage
 
   if (existsSync(layers.json) && existsSync(layers.base)) {
     try {
-      const document = JSON.parse(await readFile(layers.json, 'utf8')) as EditorDocument
+      const document = JSON.parse(await readFile(layers.json, 'utf8')) as
+        EditorDocument | LegacyEditorDocument
       const capturedAt = isTime(document.capturedAt) ? document.capturedAt : await unstored()
       const base = await readFile(layers.base)
-      return { path, base, baseMime: 'image/png', document, capturedAt }
+      const pictures = await readPictures(layers.pictures, document)
+      return { path, base, baseMime: 'image/png', document, pictures, capturedAt }
     } catch {
       // Corrupt layer data – fall back to editing the flat image.
     }
   }
   const base = await readFile(file)
-  return { path, base, baseMime: mimeFor(file), document: null, capturedAt: await unstored() }
+  return {
+    path,
+    base,
+    baseMime: mimeFor(file),
+    document: null,
+    pictures: [],
+    capturedAt: await unstored()
+  }
 }
 
 export async function removeImage(root: string, path: string): Promise<void> {
@@ -296,9 +358,11 @@ export async function removeImage(root: string, path: string): Promise<void> {
   // The layers go to the trash as well, so an image restored from there is still editable.
   // Should that fail, they are removed – left behind they would belong to no image.
   await Promise.all(
-    [layers.json, layers.base]
+    [layers.json, layers.base, layers.pictures]
       .filter((layer) => existsSync(layer))
-      .map((layer) => shell.trashItem(layer).catch(() => rm(layer, { force: true })))
+      .map((layer) =>
+        shell.trashItem(layer).catch(() => rm(layer, { recursive: true, force: true }))
+      )
   )
 }
 
@@ -357,6 +421,15 @@ export async function writeImageToClipboard(image: NativeImage): Promise<void> {
   if (image.isEmpty()) throw new Error('Das Bild konnte nicht gelesen werden.')
   const png = new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' })
   await clipboard.write([new ClipboardItem({ 'image/png': png })])
+}
+
+/** An image file of the library as it is saved. */
+export async function readImageFile(
+  root: string,
+  path: string
+): Promise<{ bytes: Uint8Array; mime: string }> {
+  const file = resolveInLibrary(root, path)
+  return { bytes: new Uint8Array(await readFile(file)), mime: mimeFor(file) }
 }
 
 /** Copies an image of the library – JPEG and WebP files arrive as PNG as well. */
