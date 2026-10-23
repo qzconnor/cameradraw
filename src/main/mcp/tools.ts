@@ -29,6 +29,8 @@ Typical flow: get_state → capture (freezes the picture and opens it in the edi
 
 Editor coordinates are image pixels (0,0 = top left; size in editor_state). The picture can be turned (editor_rotate), straightened from a perspective (editor_perspective, e.g. a chip photographed at an angle) and extended by plain space for notes (editor_extend) – all undoable, the original frame stays saved. Drawn objects are addressed by their index in stacking order (0 = bottom); indices change after deleting or arranging, so use the list the tools return. Sizes (strokeWidth, fontSize) are like the toolbar values, for a 1920 px wide image.
 
+Texts are Markdown (GitHub flavour) and are drawn formatted: # headings, **bold**, _italic_, ~~strike-through~~, \`code\`, lists (-, 1., - [ ] / - [x] tasks, nested), > quotes, tables, fenced code blocks and --- rules. Every line break is kept and an empty line stays an empty line; lines only break where the text has a line break. Plain text stays plain (escape a literal *, _ or # with a backslash). editor_state returns the source; the box is the formatted size.
+
 screenshot shows the window; click, drag, press_key and type_text operate it like a person (window coordinates in CSS pixels), e.g. for dialogs. App texts and messages are German.`
 
 const READ_ONLY: ToolAnnotations = { readOnlyHint: true, openWorldHint: false }
@@ -103,6 +105,11 @@ const maxSize = z
   .optional()
   .describe(`Longer side of the returned picture in pixels (default ${DEFAULT_IMAGE_SIZE})`)
 
+const markdown = z
+  .string()
+  .min(1)
+  .describe('Markdown, drawn formatted (see the server instructions); line breaks are kept')
+
 const shape = z.union([
   z.object({
     type: z.enum(['line', 'arrow', 'rect', 'ellipse', 'measure']),
@@ -118,7 +125,7 @@ const shape = z.union([
   z.object({
     type: z.literal('text'),
     at: point.describe('Top left corner'),
-    text: z.string().min(1),
+    text: markdown,
     ...style
   })
 ])
@@ -415,7 +422,7 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_draw',
-    'Draws objects onto the image (image pixels; one undo step). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left). Colour and sizes default to the editor\'s current style.',
+    'Draws objects onto the image (image pixels; one undo step). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left; Markdown, e.g. a heading, a list or a table of findings). Colour and sizes default to the editor\'s current style.',
     z.object({ shapes: z.array(shape).min(1).max(200) }),
     CHANGES,
     (args) => remote('editorDraw', args)
@@ -429,11 +436,11 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_update',
-    'Changes objects: colour, line width, text size, fill (rectangles, ellipses), the text of a text object, or moves them by moveBy image pixels.',
+    'Changes objects: colour, line width, text size, fill (rectangles, ellipses), the text (Markdown) of a text object, or moves them by moveBy image pixels.',
     z.object({
       indices,
       ...style,
-      text: z.string().min(1).optional(),
+      text: markdown.optional(),
       moveBy: point.optional()
     }),
     CHANGES,

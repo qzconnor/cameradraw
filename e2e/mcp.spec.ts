@@ -177,6 +177,41 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client writes notes in Markdown', async ({ page, workspace }) => {
+    await waitForMcp(page)
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+    await waitForEditor(page)
+
+    const plain = 'Befund\nRiss am Rand\nStelle A\nStelle B'
+    const notes = '# Befund\n**Riss** am Rand\n\n| Stelle | Länge |\n|---|--:|\n| A | 0,4 mm |'
+    const drawn = await call(client, 'editor_draw', {
+      shapes: [
+        { type: 'text', at: { x: 100, y: 100 }, text: plain, fontSize: 48 },
+        { type: 'text', at: { x: 1000, y: 100 }, text: notes, fontSize: 48 }
+      ]
+    })
+    // The state has the source; the box is the formatted text – the table and the larger
+    // heading take more room than four plain lines.
+    expect(drawn.objects[1]).toMatchObject({ kind: 'text', text: notes, fontSize: 48 })
+    expect(drawn.objects[1].box.height).toBeGreaterThan(drawn.objects[0].box.height * 1.2)
+
+    // Plain text lays out as it did before Markdown: four lines of fabric's line height.
+    expect(drawn.objects[0].box.height).toBeCloseTo(48 * 1.13 * (1.16 * 3 + 1), -1)
+
+    const updated = await call(client, 'editor_update', { indices: [1], text: '- [x] geprüft' })
+    expect(updated.objects[1].text).toBe('- [x] geprüft')
+    expect(updated.objects[1].box.height).toBeLessThan(drawn.objects[1].box.height / 2)
+
+    await call(client, 'editor_save')
+    const layers = readLayers(workspace.library, 'Probe.png')
+    expect(layers.objects.map((o) => [o['type'], o['text']])).toEqual([
+      ['IText', plain],
+      ['IText', '- [x] geprüft']
+    ])
+    await client.close()
+  })
+
   test('a client turns, straightens and extends the picture', async ({ page, workspace }) => {
     await waitForMcp(page)
     const client = await connect()

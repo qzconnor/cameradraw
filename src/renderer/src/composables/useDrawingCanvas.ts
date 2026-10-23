@@ -25,6 +25,7 @@ import {
   type Size
 } from '@/editor/adjust'
 import { CanvasHistory } from '@/editor/history'
+import { MarkdownText } from '@/editor/markdown'
 import {
   createMeasure,
   formatLength,
@@ -158,6 +159,8 @@ export interface DrawingCanvas {
   isEmpty: Ref<boolean>
   /** True if the drawing differs from the last loaded/saved state (incl. text being typed). */
   dirty: Ref<boolean>
+  /** A text is being typed (its Markdown source is shown). */
+  editingText: Ref<boolean>
   /** Zoom of the view, 1 = whole image (up to `MAX_VIEW_ZOOM`). */
   viewZoom: Ref<number>
   /** Size of the picture as drawn on – after its adjustments. */
@@ -276,6 +279,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const hasSelection = ref(false)
   const isEmpty = ref(true)
   const dirty = ref(false)
+  const editingText = ref(false)
   const viewZoom = ref(1)
   const imageSize = ref<Size>({ width: 0, height: 0 })
   const previewUrl = ref<string | null>(null)
@@ -592,7 +596,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
   function createText(at: XY, content: string, color: string, fontSize: number): IText {
     return tag(
-      new IText(content, {
+      new MarkdownText(content, {
         left: at.x,
         top: at.y,
         // Anchor top-left so the text grows to the right while typing.
@@ -722,11 +726,13 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     c.on('object:modified', commit)
     c.on('text:editing:entered', ({ target }) => {
       textBeforeEdit = target.text
+      editingText.value = true
     })
     // So closing or leaving the editor asks while a text is still being typed.
     c.on('text:changed', syncState)
     c.on('text:editing:exited', ({ target }) => {
       textBeforeEdit = null
+      editingText.value = false
       if (!target.text.trim()) c.remove(target)
       commit()
       if (toolBeforeText && tool.value === 'text') tool.value = toolBeforeText
@@ -1322,6 +1328,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     draft = null
     erasing = false
     textBeforeEdit = null
+    editingText.value = false
     if (c) await c.dispose()
     if (host.value) host.value.replaceChildren()
   }
@@ -1345,6 +1352,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     hasSelection,
     isEmpty,
     dirty,
+    editingText,
     viewZoom,
     imageSize,
     previewUrl,
