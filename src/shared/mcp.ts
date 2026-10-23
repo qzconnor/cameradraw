@@ -102,6 +102,13 @@ export type RemoteShape = RemoteStyle &
 
 export type RemotePanel = 'gallery' | 'settings' | 'modules' | 'updates' | 'none'
 
+/**
+ * What `editorLayers` does: `add` a drawing layer of the assistant's own, `use` a drawing layer for
+ * the next drawings, change (`update`), `move`, `duplicate`, `copy`, `paste` or `delete` one.
+ */
+export type RemoteLayerAction =
+  'add' | 'use' | 'update' | 'move' | 'duplicate' | 'copy' | 'paste' | 'delete'
+
 /** Settings an MCP client may change – not the MCP server itself. */
 export type RemoteSettings = Partial<
   Pick<
@@ -130,7 +137,7 @@ export interface RemoteActionArgs {
   copyImage: { path: string }
   editorState: Record<string, never>
   editorImage: { drawing?: boolean }
-  editorDraw: { shapes: RemoteShape[] }
+  editorDraw: { shapes: RemoteShape[]; layer?: string }
   editorSelect: { indices?: number[]; all?: boolean }
   editorUpdate: RemoteStyle & { indices: number[]; text?: string; moveBy?: RemotePoint }
   editorDelete: { indices?: number[]; all?: boolean }
@@ -149,10 +156,19 @@ export interface RemoteActionArgs {
   }
   editorSave: { name?: string; project?: string | null; asCopy?: boolean; close?: boolean }
   editorCopyImage: Record<string, never>
-  editorRotate: { degrees: 90 | 180 | 270 | -90 }
-  editorPerspective: { corners: RemotePoint[]; width?: number; height?: number }
+  editorLayers: {
+    action: RemoteLayerAction
+    layer?: string
+    name?: string
+    visible?: boolean
+    locked?: boolean
+    to?: number | 'up' | 'down' | 'top' | 'bottom'
+  }
+  editorInsertImage: { path: string; at?: RemotePoint; width?: number }
+  editorRotate: { degrees: 90 | 180 | 270 | -90; layer?: string }
+  editorPerspective: { corners: RemotePoint[]; width?: number; height?: number; layer?: string }
   editorExtend: { top?: number; right?: number; bottom?: number; left?: number; color?: string }
-  editorResetImage: Record<string, never>
+  editorResetImage: { layer?: string }
   editorClose: { discard?: boolean }
   updateSettings: RemoteSettings
 }

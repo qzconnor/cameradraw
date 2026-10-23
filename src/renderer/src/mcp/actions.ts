@@ -10,13 +10,15 @@ import {
 } from '@shared/names'
 import type { RemoteAction, RemoteActionArgs } from '@shared/mcp'
 import type { GalleryItem } from '@shared/types'
-import { MAX_SIDE, perspectiveFor } from '@/editor/adjust'
+import type { LayerDescription } from '@/composables/useDrawingCanvas'
+import { MAX_SIDE, perspectiveFor, withTurn } from '@/editor/adjust'
 import { formatScale } from '@/editor/measure'
 import { isBlockingOverlayOpen } from '@/lib/keyboard'
 import { useBurstStore } from '@/stores/burst'
 import { useCameraStore } from '@/stores/camera'
 import { useEditorStore } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
+import { useMcpStore } from '@/stores/mcp'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
 import { remotes, type EditorRemote } from './remote'
@@ -165,6 +167,55 @@ function createActions(): Actions {
     return currentEditor()!
   }
 
+  /**
+   * The editor ready for a change: crop corners being placed and an image edited on its own are
+   * left first (the image as it is), steps still being applied are done.
+   */
+  async function requireEditing(): Promise<EditorRemote> {
+    const remote = await requireEditor()
+    await remote.leaveModes()
+    await remote.canvas.settled()
+    return remote
+  }
+
+  // ── The assistant's own layers ──────────────────────────────────────────────
+
+  /** The drawing layer the assistant draws into by default, by editor session. */
+  const aiLayers = new Map<string, string>()
+
+  /** Name for a layer of the assistant: the client's own name, if it gave one. */
+  const aiName = (): string => useMcpStore().status?.lastClient?.name || 'KI'
+
+  function layerOf(remote: EditorRemote, id: string): LayerDescription {
+    const layer = remote.canvas.describeLayers().find((l) => l.id === id)
+    if (!layer) throw new Error(`Es gibt keine Ebene „${id}“ – siehe layers in editor_state.`)
+    return layer
+  }
+
+  function drawingLayerOf(remote: EditorRemote, id: string): string {
+    const layer = layerOf(remote, id)
+    if (layer.type !== 'drawing') throw new Error(`„${layer.name}“ ist keine Zeichnungsebene.`)
+    return id
+  }
+
+  /** An image layer – by default the bottom one (the frame). */
+  function imageLayerOf(remote: EditorRemote, id: string | undefined): string {
+    const target = id ?? remote.canvas.describeLayers().find((l) => l.type === 'image')?.id
+    if (!target) throw new Error('Im Bild gibt es keine Bildebene.')
+    const layer = layerOf(remote, target)
+    if (layer.type !== 'image') throw new Error(`„${layer.name}“ ist keine Bildebene.`)
+    return target
+  }
+
+  /** The assistant's drawing layer – the one it used last, else its own topmost, else a new one. */
+  function aiTarget(remote: EditorRemote): string {
+    const last = aiLayers.get(remote.baseUrl)
+    if (last && remote.canvas.describeLayers().some((l) => l.id === last && l.type === 'drawing')) {
+      return last
+    }
+    return remote.canvas.aiLayer(aiName())
+  }
+
   function editorSummary(): Record<string, unknown> | null {
     const session = editor.session
     if (!session) return null
@@ -173,10 +224,17 @@ function createActions(): Actions {
     return {
       path: session.path,
       newCapture: session.path === null,
-      // As drawn on: after turning, straightening or adding space.
-      width: canvas?.imageSize.value.width ?? session.width,
-      height: canvas?.imageSize.value.height ?? session.height,
+      // The canvas with every layer (after turning, straightening or adding space).
+      width: canvas?.canvasSize().width ?? session.width,
+      height: canvas?.canvasSize().height ?? session.height,
+      // Of the frame (the bottom image layer).
       adjustments: canvas?.adjustments() ?? [],
+      layerCount: canvas?.layers.value.length ?? 0,
+      activeLayer: canvas?.activeLayer.value ?? null,
+      aiLayer: aiLayers.get(session.baseUrl) ?? null,
+      imageView: canvas?.imageView.value
+        ? { layer: canvas.imageView.value.layerId, name: canvas.imageView.value.name }
+        : null,
       capturedAt: iso(session.capturedAt),
       // The canvas knows first – the store follows a moment later.
       unsavedChanges: canvas?.dirty.value ?? editor.dirty,
@@ -194,6 +252,7 @@ function createActions(): Actions {
 
   const editorDetail = (remote: EditorRemote): Record<string, unknown> => ({
     ...editorSummary(),
+    layers: remote.canvas.describeLayers(),
     objects: remote.canvas.describeObjects()
   })
 
@@ -509,26 +568,104 @@ function createActions(): Actions {
     async editorImage({ drawing = true }) {
       const remote = await requireEditor()
       if (!drawing) return { png: editor.session!.baseBytes }
+      await remote.leaveModes()
       await remote.canvas.settled()
       return { png: await remote.canvas.exportImage() }
     },
 
-    async editorDraw({ shapes }) {
-      const remote = await requireEditor()
-      await remote.canvas.settled()
-      const added = remote.canvas.drawShapes(shapes)
+    async editorDraw({ shapes, layer }) {
+      const remote = await requireEditing()
+      // Into the layer asked for – the assistant's one from then on – or its own.
+      const target = layer ? drawingLayerOf(remote, layer) : aiTarget(remote)
+      aiLayers.set(remote.baseUrl, target)
+      const added = remote.canvas.drawShapes(shapes, target)
       const all = remote.canvas.objects()
-      return { added: added.map((obj) => all.indexOf(obj)), ...editorDetail(remote) }
+      return {
+        added: added.map((obj) => all.indexOf(obj)),
+        layer: target,
+        ...editorDetail(remote)
+      }
+    },
+
+    async editorLayers({ action, layer, name, visible, locked, to }) {
+      const remote = await requireEditing()
+      const { canvas } = remote
+      const needLayer = (): LayerDescription => {
+        if (!layer) throw new Error('Welche Ebene? layer angeben (id aus editor_state).')
+        return layerOf(remote, layer)
+      }
+      const added = (before: Set<string>): string | null =>
+        canvas.layers.value.find((l) => !before.has(l.id))?.id ?? null
+      const known = new Set(canvas.layers.value.map((l) => l.id))
+      let result: Record<string, unknown> = {}
+      switch (action) {
+        case 'add': {
+          // A layer of the assistant's own, on top – its next drawings go there.
+          const id = canvas.addLayer(name ?? aiName(), 'ai')
+          aiLayers.set(remote.baseUrl, id)
+          result = { added: id }
+          break
+        }
+        case 'use':
+          aiLayers.set(remote.baseUrl, drawingLayerOf(remote, needLayer().id))
+          break
+        case 'update': {
+          if (name === undefined && visible === undefined && locked === undefined) {
+            throw new Error('Was ändern? name, visible oder locked angeben.')
+          }
+          canvas.updateLayer(needLayer().id, { name, visible, locked })
+          break
+        }
+        case 'move': {
+          const { id, index } = needLayer()
+          if (to === undefined) throw new Error('Wohin? to angeben (Index, up, down, top, bottom).')
+          const last = canvas.layers.value.length - 1
+          canvas.moveLayer(
+            id,
+            typeof to === 'number'
+              ? to
+              : { up: index + 1, down: index - 1, top: last, bottom: 0 }[to]
+          )
+          break
+        }
+        case 'duplicate':
+          await canvas.duplicateLayer(needLayer().id)
+          result = { added: added(known) }
+          break
+        case 'copy':
+          canvas.copyLayers([needLayer().id])
+          break
+        case 'paste':
+          if (!canvas.pasteKind.value) throw new Error('Es wurde noch nichts kopiert.')
+          await canvas.paste()
+          result = { added: added(known) }
+          break
+        case 'delete': {
+          const { id } = needLayer()
+          canvas.removeLayer(id)
+          if (aiLayers.get(remote.baseUrl) === id) aiLayers.delete(remote.baseUrl)
+          break
+        }
+      }
+      await canvas.settled()
+      return { ...result, ...editorDetail(remote) }
+    },
+
+    async editorInsertImage({ path, at, width }) {
+      const item = await requireImage(path)
+      const remote = await requireEditing()
+      const id = await remote.insertGalleryImage(item, { at, width, owner: 'ai' })
+      return { added: id, ...editorDetail(remote) }
     },
 
     async editorSelect({ indices, all }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       remote.canvas.selectObjects(all ? remote.canvas.objects() : objectsAt(remote, indices ?? []))
       return editorDetail(remote)
     },
 
     async editorUpdate({ indices, moveBy, ...change }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       const objects = objectsAt(remote, indices)
       if (Object.values(change).some((v) => v !== undefined)) remote.canvas.restyle(objects, change)
       if (moveBy) remote.canvas.moveObjects(objects, moveBy.x, moveBy.y)
@@ -536,7 +673,7 @@ function createActions(): Actions {
     },
 
     async editorDelete({ indices, all }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       if (all) remote.canvas.clearAll()
       else if (indices?.length) remote.canvas.removeObjects(objectsAt(remote, indices))
       else throw new Error('Welche Objekte? indices angeben oder all: true.')
@@ -544,15 +681,14 @@ function createActions(): Actions {
     },
 
     async editorArrange({ indices, where }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       remote.canvas.arrange(where, objectsAt(remote, indices))
       return editorDetail(remote)
     },
 
     async editorClipboard({ action, indices, at }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       const { canvas } = remote
-      await canvas.settled()
       const objects = indices ? objectsAt(remote, indices) : undefined
       if (action === 'copy') {
         if (!canvas.copyObjects(objects)) throw new Error('Nichts ausgewählt zum Kopieren.')
@@ -560,7 +696,7 @@ function createActions(): Actions {
         if (objects) canvas.selectObjects(objects)
         if (!canvas.cutSelection()) throw new Error('Nichts ausgewählt zum Ausschneiden.')
       } else if (action === 'paste') {
-        if (!canvas.canPaste.value) throw new Error('Es wurde noch nichts kopiert.')
+        if (!canvas.pasteKind.value) throw new Error('Es wurde noch nichts kopiert.')
         await canvas.paste(at)
       } else {
         await canvas.duplicate(objects)
@@ -569,7 +705,7 @@ function createActions(): Actions {
     },
 
     async editorHistory({ action, steps = 1 }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       const { canvas } = remote
       let done = 0
       for (; done < steps; done++) {
@@ -597,51 +733,58 @@ function createActions(): Actions {
       return { viewZoom: canvas.viewZoom.value }
     },
 
-    async editorRotate({ degrees }) {
-      const remote = await requireEditor()
-      remote.stopCropping()
+    async editorRotate({ degrees, layer }) {
+      const remote = await requireEditing()
+      const { canvas } = remote
       const turns = (((Math.round(degrees / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3
-      if (turns) await remote.canvas.adjustImage({ type: 'rotate', turns })
+      if (turns && layer) {
+        // Only that picture.
+        const id = imageLayerOf(remote, layer)
+        await canvas.changeImage(id, withTurn(canvas.imageAdjustments(id), turns))
+      } else if (turns) await canvas.rotateCanvas(turns)
       return editorDetail(remote)
     },
 
-    async editorPerspective({ corners, width, height }) {
-      const remote = await requireEditor()
-      remote.stopCropping()
-      const adjustment = perspectiveFor(corners, { width, height })
+    async editorPerspective({ corners, width, height, layer }) {
+      const remote = await requireEditing()
+      const { canvas } = remote
+      const id = imageLayerOf(remote, layer)
+      // The corners in the canvas, the crop in the picture's own pixels.
+      const adjustment = perspectiveFor(
+        corners.map((p) => canvas.imagePoint(id, p)),
+        { width, height }
+      )
       if (!adjustment) {
         throw new Error(
           `Die vier Ecken bilden kein Viereck, oder das Ergebnis wäre größer als ${MAX_SIDE} Pixel.`
         )
       }
-      await remote.canvas.adjustImage(adjustment)
+      await canvas.changeImage(id, [...canvas.imageAdjustments(id), adjustment])
       return editorDetail(remote)
     },
 
     async editorExtend({ top = 0, right = 0, bottom = 0, left = 0, color = '#ffffff' }) {
-      const remote = await requireEditor()
-      remote.stopCropping()
+      const remote = await requireEditing()
       const sides = [top, right, bottom, left]
       if (sides.some((side) => !Number.isInteger(side) || side < 0) || !sides.some(Boolean)) {
         throw new Error('Mindestens eine Seite braucht eine Fläche (ganze Pixel ab 1).')
       }
-      const { width, height } = remote.canvas.imageSize.value
+      const { width, height } = remote.canvas.canvasSize()
       if (Math.max(width + left + right, height + top + bottom) > MAX_SIDE) {
         throw new Error(`Das Bild darf höchstens ${MAX_SIDE} Pixel breit und hoch werden.`)
       }
-      await remote.canvas.adjustImage({ type: 'extend', top, right, bottom, left, color })
+      await remote.canvas.extendCanvas({ type: 'extend', top, right, bottom, left, color })
       return editorDetail(remote)
     },
 
-    async editorResetImage() {
-      const remote = await requireEditor()
-      remote.stopCropping()
-      await remote.canvas.resetImage()
+    async editorResetImage({ layer }) {
+      const remote = await requireEditing()
+      await remote.canvas.resetImage(imageLayerOf(remote, layer))
       return editorDetail(remote)
     },
 
     async editorSetScale({ micronsPerPixel, calibrate }) {
-      const remote = await requireEditor()
+      const remote = await requireEditing()
       if (calibrate) {
         const line = remote.canvas.describeObjects()[calibrate.index]
         if (line?.kind !== 'measure' || !line.lengthPixels) {

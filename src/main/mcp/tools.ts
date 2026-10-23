@@ -27,7 +27,9 @@ const INSTRUCTIONS = `CameraDraw shows the live picture of a camera (USB microsc
 
 Typical flow: get_state → capture (freezes the picture and opens it in the editor, or with mode "save" stores it right away) → editor_draw / editor_update … → editor_save. Saved images: list_library, get_image, open_image.
 
-Editor coordinates are image pixels (0,0 = top left; size in editor_state). The picture can be turned (editor_rotate), straightened from a perspective (editor_perspective, e.g. a chip photographed at an angle) and extended by plain space for notes (editor_extend) – all undoable, the original frame stays saved. Drawn objects are addressed by their index in stacking order (0 = bottom); indices change after deleting or arranging, so use the list the tools return. Sizes (strokeWidth, fontSize) are like the toolbar values, for a 1920 px wide image.
+Editor coordinates are image pixels of the canvas (0,0 = top left; size in editor_state). The picture can be turned (editor_rotate), straightened from a perspective (editor_perspective, e.g. a chip photographed at an angle) and extended by plain space for notes (editor_extend) – all undoable, the original frame stays saved. Drawn objects are addressed by their index in stacking order (0 = bottom); indices change after deleting or arranging, so use the list the tools return. Sizes (strokeWidth, fontSize) are like the toolbar values, for a 1920 px wide image.
+
+The picture has layers (editor_state → layers, bottom first): image layers (the frame, and pictures pulled in from the library with editor_insert_image – each can be cropped and turned on its own, also later), space added beside the picture, and drawing layers holding the drawn objects. The user works in their own layers; draw into layers of your own: editor_draw without layer uses the layer you used last (a new one of yours on top the first time). Make as many as you need with editor_layers add (e.g. one for labels, one for measurements), switch with editor_layers use or the layer parameter of editor_draw, and reorder, hide, rename, copy or delete them with editor_layers.
 
 Texts are Markdown (GitHub flavour) and are drawn formatted: # headings, **bold**, _italic_, ~~strike-through~~, \`code\`, lists (-, 1., - [ ] / - [x] tasks, nested), > quotes, tables, fenced code blocks and --- rules. Every line break is kept and an empty line stays an empty line; lines only break where the text has a line break. Plain text stays plain (escape a literal *, _ or # with a backslash). editor_state returns the source; the box is the formatted size.
 
@@ -109,6 +111,8 @@ const markdown = z
   .string()
   .min(1)
   .describe('Markdown, drawn formatted (see the server instructions); line breaks are kept')
+
+const layerId = z.string().describe('Layer id from editor_state (layers)')
 
 const shape = z.union([
   z.object({
@@ -401,7 +405,7 @@ export function createMcpServer(): McpServer {
   // Editor
   add(
     'editor_state',
-    'The image in the editor: path (null = new capture), size, unsaved changes, scale for measuring, tool and style, and every drawn object with its index, kind, bounding box, colour and text or measured length.',
+    'The image in the editor: path (null = new capture), canvas size, unsaved changes, scale for measuring, tool and style, its layers (bottom first: id, type image / fill / drawing, name, visible, locked, owner "ai" for yours, the one the user works on, objects of drawing layers, box and adjustments of images), the layer you draw into by default (aiLayer), and every drawn object with its index, layer, kind, bounding box, colour and text or measured length.',
     none,
     READ_ONLY,
     () => remote('editorState', {})
@@ -422,10 +426,38 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_draw',
-    'Draws objects onto the image (image pixels; one undo step). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left; Markdown, e.g. a heading, a list or a table of findings). Colour and sizes default to the editor\'s current style.',
-    z.object({ shapes: z.array(shape).min(1).max(200) }),
+    'Draws objects onto the image (image pixels; one undo step) – into a drawing layer of your own: the one you used last, or layer (any drawing layer, yours from then on). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left; Markdown, e.g. a heading, a list or a table of findings). Colour and sizes default to the editor\'s current style.',
+    z.object({
+      shapes: z.array(shape).min(1).max(200),
+      layer: layerId.optional()
+    }),
     CHANGES,
     (args) => remote('editorDraw', args)
+  )
+  add(
+    'editor_layers',
+    'Layers of the picture. add: a new drawing layer of yours on top (name optional) – your next drawings go there; use: draw into that drawing layer from now on; update: name, visible, locked (locked layers cannot be picked in the picture); move: to an index (0 = bottom) or up, down, top, bottom; duplicate, copy (with its pictures, also for other images), paste (what was copied last – layers or objects), delete. Undoable.',
+    z.object({
+      action: z.enum(['add', 'use', 'update', 'move', 'duplicate', 'copy', 'paste', 'delete']),
+      layer: layerId.optional().describe('The layer to act on (all actions but add and paste)'),
+      name: z.string().min(1).max(80).optional(),
+      visible: z.boolean().optional(),
+      locked: z.boolean().optional(),
+      to: z.union([z.number().int().min(0), z.enum(['up', 'down', 'top', 'bottom'])]).optional()
+    }),
+    CHANGES,
+    (args) => remote('editorLayers', args)
+  )
+  add(
+    'editor_insert_image',
+    'Pulls a saved image (as saved, with its drawing) into the picture in the editor as an image layer of its own – e.g. to show several pictures side by side or an overview with a detail. at: its middle (canvas pixels, default the middle), width: its width in the canvas (default: fitting into half of it). Extend the canvas first (editor_extend) to place it beside the frame. It can be cropped or turned on its own (editor_perspective / editor_rotate with layer).',
+    z.object({
+      path: imagePath,
+      at: point.optional(),
+      width: z.number().min(8).max(12_000).optional()
+    }),
+    CHANGES,
+    (args) => remote('editorInsertImage', args)
   )
   add(
     'editor_select',
@@ -514,27 +546,29 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_rotate',
-    'Turns the picture in the editor clockwise by 90, 180 or 270 degrees (-90 = a quarter to the left). Drawn objects turn along. Undoable; the original stays saved.',
+    'Turns the picture in the editor clockwise by 90, 180 or 270 degrees (-90 = a quarter to the left) – the whole canvas with every layer, or with layer only that image layer. Drawn objects turn along. Undoable; the original stays saved.',
     z.object({
-      degrees: z.union([z.literal(90), z.literal(180), z.literal(270), z.literal(-90)])
+      degrees: z.union([z.literal(90), z.literal(180), z.literal(270), z.literal(-90)]),
+      layer: layerId.optional().describe('An image layer to turn on its own')
     }),
     CHANGES,
     (args) => remote('editorRotate', args)
   )
   add(
     'editor_perspective',
-    'Perspective crop: the quadrilateral with these four corners (image pixels, any order) becomes a straight rectangle, everything outside is cut off – e.g. the edges of a chip or a sheet photographed at an angle. The size is the longer of each pair of opposite edges unless width/height are given (e.g. for the real aspect ratio). Look at editor_image to find the corners. Drawn objects move along. Undoable; the original stays saved.',
+    "Perspective crop of an image layer (default: the frame, the bottom image): the quadrilateral with these four corners (canvas pixels, any order) becomes a straight rectangle, the rest of that picture is cut off – e.g. the edges of a chip or a sheet photographed at an angle. Space and other layers beside the frame stay; the canvas follows the frame's new size. The size is the longer of each pair of opposite edges unless width/height are given (in the picture's own pixels, e.g. for the real aspect ratio). Look at editor_image to find the corners. Drawn objects on it move along. Undoable; the original stays saved.",
     z.object({
       corners: z.array(point).length(4),
       width: z.number().int().min(1).max(12_000).optional(),
-      height: z.number().int().min(1).max(12_000).optional()
+      height: z.number().int().min(1).max(12_000).optional(),
+      layer: layerId.optional().describe('An image layer (default: the frame)')
     }),
     CHANGES,
     (args) => remote('editorPerspective', args)
   )
   add(
     'editor_extend',
-    'Adds plain space around the picture (pixels per side), e.g. on the right to write notes there with editor_draw text. color: the fill, default white. Undoable.',
+    'Adds plain space around the canvas (pixels per side) as layers of their own, e.g. on the right to write notes there with editor_draw text or to place an image with editor_insert_image. color: the fill, default white. Undoable.',
     z.object({
       top: z.number().int().min(0).optional(),
       right: z.number().int().min(0).optional(),
@@ -547,10 +581,10 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_reset_image',
-    'Undoes every turn, perspective crop and added space at once – back to the original frame; drawn objects move back.',
-    none,
+    'Undoes every turn and perspective crop of an image layer at once (default: the frame) – back to its original picture; drawn objects on it move back. Added space stays (delete its layer with editor_layers).',
+    z.object({ layer: layerId.optional() }),
     CHANGES,
-    () => remote('editorResetImage', {})
+    (args) => remote('editorResetImage', args)
   )
   add(
     'editor_save',

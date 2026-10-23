@@ -18,6 +18,8 @@ defineProps<{
   adjusted: boolean
   /** Crop corners are being placed – the crop button ends it, the others wait. */
   cropping: boolean
+  /** One image is edited on its own – space is added to the whole picture only. */
+  imageView?: boolean
   disabled?: boolean
 }>()
 
@@ -74,7 +76,7 @@ const emit = defineEmits<{
         variant="ghost"
         size="icon"
         aria-label="Fläche anfügen"
-        :disabled="disabled || cropping"
+        :disabled="disabled || cropping || imageView"
         @click="emit('extend')"
       >
         <ImageUpscaleIcon />

@@ -101,8 +101,69 @@ export type ImageAdjustment =
   /** Space added around the picture, filled with `color`. */
   | { type: 'extend'; top: number; right: number; bottom: number; left: number; color: string }
 
-/** Serialized drawing layer (fabric objects) on top of the base image. */
+interface LayerBase {
+  /** Short random id, unique within the document. */
+  id: string
+  name: string
+  visible: boolean
+  /** Locked layers cannot be selected or moved in the picture (an image can still be cropped). */
+  locked: boolean
+  /** Drawn by an AI assistant (MCP) – it keeps its own layers. */
+  owner?: 'ai'
+}
+
+/**
+ * A picture: the original frame (`source: 'base'`) or one pulled in from the gallery (an id of
+ * the pictures saved next to the image, see `LayerPicture`). Its adjustments are applied to the
+ * source, so it can be cropped again later; the result lies at `left`/`top`, scaled by `scale`.
+ */
+export interface ImageLayerData extends LayerBase {
+  type: 'image'
+  source: string
+  adjustments: ImageAdjustment[]
+  left: number
+  top: number
+  scale: number
+}
+
+/** Plain space added beside the picture, filled with `color`. */
+export interface FillLayerData extends LayerBase {
+  type: 'fill'
+  color: string
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/** Shapes, texts and measuring lines (fabric objects, bottom first). */
+export interface DrawingLayerData extends LayerBase {
+  type: 'drawing'
+  objects: Record<string, unknown>[]
+}
+
+export type LayerData = ImageLayerData | FillLayerData | DrawingLayerData
+
+export type LayerType = LayerData['type']
+
+/** The editable layers of an image, stored as JSON next to it. */
 export interface EditorDocument {
+  version: 2
+  /** Size of the canvas the layers lie on. */
+  width: number
+  height: number
+  /** Bottom first. */
+  layers: LayerData[]
+  /** When the picture was taken (ms since epoch); added on saving. */
+  capturedAt?: number
+  /** Scale of the picture for measuring, if known (calibrated). */
+  micronsPerPixel?: number
+  /** How the picture was taken – needed to carry a calibration over to other pictures. */
+  capture?: CaptureInfo
+}
+
+/** Layers as written before there were layers: one drawing on the (adjusted) frame. */
+export interface LegacyEditorDocument {
   version: 1
   /** Size of the picture the objects are drawn on – after the adjustments. */
   width: number
@@ -110,13 +171,20 @@ export interface EditorDocument {
   objects: Record<string, unknown>[]
   /** Changes of the picture (turned, straightened, extended); missing in older files. */
   adjustments?: ImageAdjustment[]
-  /** When the picture was taken (ms since epoch); added on saving, missing in older files. */
   capturedAt?: number
-  /** Scale of the picture for measuring, if known (calibrated). */
   micronsPerPixel?: number
-  /** How the picture was taken – needed to carry a calibration over to other pictures. */
   capture?: CaptureInfo
 }
+
+/** A picture of an image layer (PNG), besides the original frame. */
+export interface LayerPicture {
+  /** Letters and digits only – it names the file. */
+  id: string
+  bytes: Uint8Array
+}
+
+export const isPictureId = (id: unknown): id is string =>
+  typeof id === 'string' && /^[a-z0-9]{1,32}$/i.test(id)
 
 export interface CaptureInfo {
   /** Zoom factor of the camera view (digital or the camera's own), 1 = none. */
@@ -148,6 +216,8 @@ export interface SaveImageRequest {
   /** Untouched base image (camera frame), PNG. */
   base: Uint8Array
   document: EditorDocument
+  /** Pictures of the image layers besides the frame – those not listed are removed. */
+  pictures: LayerPicture[]
   /** When the picture was taken – an edited image keeps the date it had. */
   capturedAt: number
 }
@@ -157,8 +227,10 @@ export interface LoadedImage {
   /** Base image bytes – the original frame if available, otherwise the flattened file. */
   base: Uint8Array
   baseMime: string
-  /** Editable drawing layer, null if the file has no project data. */
-  document: EditorDocument | null
+  /** Editable layers, null if the file has no project data (older versions: `version: 1`). */
+  document: EditorDocument | LegacyEditorDocument | null
+  /** Pictures of its image layers besides the frame. */
+  pictures: LayerPicture[]
   /** When the picture was taken, see `GalleryItem.capturedAt`. */
   capturedAt: number
 }
@@ -216,6 +288,7 @@ export const IPC = {
   libraryRemoveProject: 'library:remove-project',
   libraryOpenFolder: 'library:open-folder',
   libraryCopyImage: 'library:copy-image',
+  libraryReadImage: 'library:read-image',
   libraryChanged: 'library:changed',
   clipboardWriteImage: 'clipboard:write-image',
   clipboardWriteText: 'clipboard:write-text',

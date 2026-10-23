@@ -258,6 +258,111 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client draws into layers of its own and pulls in an image', async ({
+    page,
+    workspace
+  }) => {
+    addImage(workspace.library, 'Detail.png')
+    await waitForMcp(page)
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+    type Layer = {
+      id: string
+      name: string
+      type: string
+      owner: string | null
+      active: boolean
+      objects?: number[]
+      box?: { left: number; top: number; width: number; height: number }
+      pictureSize?: { width: number; height: number }
+      adjustments?: unknown[]
+    }
+    const layer = (state: { layers: Layer[] }, id: string): Layer =>
+      state.layers.find((l) => l.id === id)!
+    const names = (state: { layers: Layer[] }): string[] => state.layers.map((l) => l.name)
+
+    // Without a layer: one of its own on top, named after the client – the user keeps theirs.
+    const first = await call(client, 'editor_draw', {
+      shapes: [{ type: 'rect', from: { x: 100, y: 100 }, to: { x: 300, y: 200 } }]
+    })
+    expect(layer(first, first.layer)).toMatchObject({
+      type: 'drawing',
+      name: 'e2e-client',
+      owner: 'ai',
+      objects: [0]
+    })
+    expect(names(first)).toEqual(['Bild', 'Zeichnung', 'e2e-client'])
+    expect(first.layers.find((l: Layer) => l.active).name).toBe('Zeichnung')
+
+    // As many as it needs: the next drawing goes into the one added last …
+    const labels = await call(client, 'editor_layers', { action: 'add', name: 'Beschriftung' })
+    const text = await call(client, 'editor_draw', {
+      shapes: [{ type: 'text', at: { x: 400, y: 400 }, text: 'Probe' }]
+    })
+    expect(text.layer).toBe(labels.added)
+    // … or into the one asked for.
+    const line = await call(client, 'editor_draw', {
+      layer: first.layer,
+      shapes: [{ type: 'line', from: { x: 0, y: 0 }, to: { x: 50, y: 50 } }]
+    })
+    expect(layer(line, first.layer).objects).toHaveLength(2)
+    expect(line.aiLayer).toBe(first.layer)
+
+    await call(client, 'editor_layers', {
+      action: 'update',
+      layer: labels.added,
+      name: 'Notizen',
+      visible: false
+    })
+    const moved = await call(client, 'editor_layers', {
+      action: 'move',
+      layer: labels.added,
+      to: 'top'
+    })
+    expect(names(moved)).toEqual(['Bild', 'Zeichnung', 'e2e-client', 'Notizen'])
+    expect(layer(moved, labels.added)).toMatchObject({ visible: false })
+    expect(
+      await callError(client, 'editor_draw', {
+        layer: moved.layers[0].id,
+        shapes: [{ type: 'line', from: { x: 0, y: 0 }, to: { x: 50, y: 50 } }]
+      })
+    ).toContain('keine Zeichnungsebene')
+
+    // An image of the library: 800 px wide around (1440, 540) – then cropped on its own.
+    const inserted = await call(client, 'editor_insert_image', {
+      path: 'Detail.png',
+      at: { x: 1440, y: 540 },
+      width: 800
+    })
+    const detail = layer(inserted, inserted.added)
+    expect(detail).toMatchObject({ type: 'image', name: 'Detail', owner: 'ai' })
+    expect(detail.box).toEqual({ left: 1040, top: 315, width: 800, height: 450 })
+    const cropped = await call(client, 'editor_perspective', {
+      layer: detail.id,
+      corners: [
+        { x: 1140, y: 415 },
+        { x: 1740, y: 415 },
+        { x: 1740, y: 665 },
+        { x: 1140, y: 665 }
+      ]
+    })
+    // In the picture's own pixels; its middle stays; the frame and the canvas stay as they are.
+    expect(layer(cropped, detail.id).pictureSize).toEqual({ width: 1440, height: 600 })
+    expect(layer(cropped, detail.id).box!.left).toBeCloseTo(1140, 0)
+    expect(cropped).toMatchObject({ width: 1920, height: 1080, adjustments: [] })
+
+    await call(client, 'editor_layers', { action: 'delete', layer: labels.added })
+    await call(client, 'editor_save')
+    const saved = readLayers(workspace.library, 'Probe.png')
+    expect(saved.layers.map((l) => [l.name, l.owner ?? null])).toEqual([
+      ['Bild', null],
+      ['Zeichnung', null],
+      ['e2e-client', 'ai'],
+      ['Detail', 'ai']
+    ])
+    await client.close()
+  })
+
   test('keys and mouse sent by a client reach the app', async ({ page }) => {
     await waitForLiveCamera(page)
     await waitForMcp(page)

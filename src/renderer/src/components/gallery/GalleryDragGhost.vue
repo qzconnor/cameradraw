@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { ref, useTemplateRef, watch } from 'vue'
 import { useRafFn } from '@vueuse/core'
-import { FolderInputIcon, ImagesIcon } from '@lucide/vue'
+import { FolderInputIcon, ImagePlusIcon, ImagesIcon } from '@lucide/vue'
 import { Badge } from '@/components/ui/badge'
 import { useGalleryDrag } from '@/composables/useGalleryDrag'
 import { cn } from '@/lib/utils'
 
 /** The image card following the pointer while it is dragged onto a project. */
 const drag = useGalleryDrag()
-const { active, phase, over } = drag
+const { active, phase, over, overEditor } = drag
 const ghost = useTemplateRef<HTMLElement>('ghost')
 
 /** Target under the pointer ('' = "Kein Projekt") – kept while the hint fades out. */
 const label = ref('')
-watch(over, (project) => {
-  if (project !== null) label.value = project
+const intoEditor = ref(false)
+watch([over, overEditor], ([project, editor]) => {
+  if (editor) intoEditor.value = true
+  else if (project !== null) {
+    intoEditor.value = false
+    label.value = project
+  }
 })
 
 // Animated state, eased towards its goal every frame.
@@ -116,13 +121,19 @@ watch(phase, async (next) => {
         :class="
           cn(
             'absolute top-full left-1/2 mt-2 -translate-x-1/2 shadow-lg transition-opacity duration-150',
-            over === null && 'opacity-0'
+            over === null && !overEditor && 'opacity-0'
           )
         "
       >
-        <ImagesIcon v-if="!label" data-icon="inline-start" />
-        <FolderInputIcon v-else data-icon="inline-start" />
-        {{ label || 'Kein Projekt' }}
+        <template v-if="intoEditor">
+          <ImagePlusIcon data-icon="inline-start" />
+          Ins Bild einfügen
+        </template>
+        <template v-else>
+          <ImagesIcon v-if="!label" data-icon="inline-start" />
+          <FolderInputIcon v-else data-icon="inline-start" />
+          {{ label || 'Kein Projekt' }}
+        </template>
       </Badge>
     </div>
   </Teleport>

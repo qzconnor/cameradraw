@@ -1,5 +1,5 @@
 import { onBeforeUnmount, shallowRef, type ShallowRef } from 'vue'
-import type { GalleryItem } from '@shared/types'
+import type { GalleryItem, ImagePoint } from '@shared/types'
 import type { DrawingCanvas } from '@/composables/useDrawingCanvas'
 
 /**
@@ -30,8 +30,16 @@ export interface EditorRemote {
   copyImage(): Promise<void>
   /** Sets the scale for measuring, remembered for new pictures of the camera if asked. */
   calibrate(micronsPerPixel: number, remember: boolean): void
-  /** Leaves placing the corners of a perspective crop, if that is going on. */
-  stopCropping(): void
+  /**
+   * Leaves placing the corners of a perspective crop and editing one image on its own, if that is
+   * going on – the image is taken as it is.
+   */
+  leaveModes(): Promise<void>
+  /** Adds an image of the gallery (as saved) as a layer; resolves with its id. */
+  insertGalleryImage(
+    item: GalleryItem,
+    options: { at?: ImagePoint; width?: number; owner?: 'ai' }
+  ): Promise<string>
 }
 
 interface Remotes {

@@ -63,13 +63,19 @@ test('turning and adding space move the drawing along; the original stays', asyn
   const file = join(workspace.library, 'Probe.png')
   expect(pngSize(file)).toEqual({ width: 1620, height: 1920 })
   const layers = readLayers(workspace.library, 'Probe.png')
+  // The frame is turned, the space is a layer of its own beside it.
   expect(layers).toMatchObject({
     width: 1620,
     height: 1920,
-    adjustments: [
-      { type: 'rotate', turns: 1 },
-      { type: 'extend', top: 0, right: 540, bottom: 0, left: 0, color: '#ffffff' }
-    ]
+    adjustments: [{ type: 'rotate', turns: 1 }]
+  })
+  expect(layers.layers.find((l) => l.type === 'fill')).toMatchObject({
+    name: 'Fläche rechts',
+    left: 1080,
+    top: 0,
+    width: 540,
+    height: 1920,
+    color: '#ffffff'
   })
   // The original frame is kept as it was.
   expect(pngSize(join(workspace.library, '.cameradraw', 'Probe.base.png'))).toEqual({
@@ -247,11 +253,18 @@ test('dragging an edge adds space; a click or right-click on it asks for the amo
   const file = join(workspace.library, 'Probe.png')
   const width = 1920 + dragged + 200 + 100
   expect(pngSize(file)).toEqual({ width, height: 1080 })
-  expect(readLayers(workspace.library, 'Probe.png').adjustments).toMatchObject([
-    { type: 'extend', right: dragged, color: '#ffffff' },
-    { type: 'extend', right: 200, color: '#ffffff' },
-    { type: 'extend', left: 100, color: '#3b82f6' }
-  ])
+  // Each space is a layer of its own; the frame itself is unchanged.
+  const saved = readLayers(workspace.library, 'Probe.png')
+  expect(saved.adjustments).toBeUndefined()
+  expect(
+    saved.layers.filter((l) => l.type === 'fill').map((l) => [l.left, l.width, l.color])
+  ).toEqual(
+    expect.arrayContaining([
+      [0, 100, '#3b82f6'],
+      [2020, dragged, '#ffffff'],
+      [2020 + dragged, 200, '#ffffff']
+    ])
+  )
   expect(await pixel(app, file, 50, 540)).toEqual([59, 130, 246])
   expect(near(await pixel(app, file, 150, 540), testColor(50, 540))).toBe(true)
   expect(await pixel(app, file, width - 20, 540)).toEqual([255, 255, 255])

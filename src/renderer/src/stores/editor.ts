@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
-import type { CaptureInfo, EditorDocument } from '@shared/types'
+import type { CaptureInfo, EditorDocument, LayerPicture, LegacyEditorDocument } from '@shared/types'
 import { isShapeTool, type DrawStyle, type ShapeTool, type Tool } from '@/editor/tools'
 import { bytesToObjectUrl, canvasToBytes, imageSize } from '@/lib/image'
 import { useCameraStore } from './camera'
@@ -16,7 +16,10 @@ export interface EditorSession {
   baseBytes: Uint8Array
   width: number
   height: number
-  document: EditorDocument | null
+  /** The layers as saved (older versions: one drawing), null for a fresh capture. */
+  document: EditorDocument | LegacyEditorDocument | null
+  /** Pictures of its image layers besides the frame. */
+  pictures: LayerPicture[]
   /** When the picture was taken: a fresh capture now, an image from the gallery keeps its date. */
   capturedAt: number
   /** Scale for measuring: of the image, or for a fresh capture from its camera's calibration. */
@@ -130,6 +133,7 @@ export const useEditorStore = defineStore('editor', () => {
       width,
       height,
       document: null,
+      pictures: [],
       capturedAt: Date.now(),
       micronsPerPixel: scaleOfCapture(capture),
       capture
@@ -152,6 +156,7 @@ export const useEditorStore = defineStore('editor', () => {
         width,
         height,
         document: loaded.document,
+        pictures: loaded.pictures,
         capturedAt: loaded.capturedAt,
         micronsPerPixel: loaded.document?.micronsPerPixel ?? null,
         capture: loaded.document?.capture ?? { zoom: 1, frameWidth: width }

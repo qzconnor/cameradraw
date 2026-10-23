@@ -15,6 +15,7 @@ import {
 } from './updater'
 import {
   copyImageToClipboard,
+  readImageFile,
   createProject,
   listLibrary,
   loadImage,
@@ -150,6 +151,7 @@ export function registerIpc(): void {
   )
   ipcMain.handle(IPC.libraryReveal, (_e, path: string) => reveal(requireSaveDir(), path))
   ipcMain.handle(IPC.libraryOpenFolder, () => shell.openPath(requireSaveDir()))
+  ipcMain.handle(IPC.libraryReadImage, (_e, path: string) => readImageFile(requireSaveDir(), path))
   ipcMain.handle(IPC.libraryCopyImage, (_e, path: string) =>
     copyImageToClipboard(requireSaveDir(), path)
   )

@@ -87,7 +87,10 @@ async function moveImage(
   }
 }
 
-drag.onDrop(({ item, project }) => void moveImage(item, project))
+drag.onDrop(({ item, target }) => {
+  // Dropped into the editor's picture: the editor takes it as a layer.
+  if (target.kind === 'project') void moveImage(item, target.project)
+})
 
 /** Drop targets in the dock: "Kein Projekt" and every project not shown as a card. */
 const dockTargets = computed<(string | null)[]>(() => {
