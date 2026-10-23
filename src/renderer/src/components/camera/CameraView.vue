@@ -2,14 +2,16 @@
 import { computed, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 // Left/right mirror icon (vertical centre line). Lucide's old `FlipHorizontal2` alias shows up/down.
-import { TrianglesCenterlineDashedVerticalIcon } from '@lucide/vue'
+import { ImagesIcon, TrianglesCenterlineDashedVerticalIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
+import type { CaptureInfo } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import HintTooltip from '@/components/common/HintTooltip.vue'
 import { Toggle } from '@/components/ui/toggle'
 import { useVideoPicture } from '@/composables/useVideoPicture'
-import { captureFrame } from '@/lib/capture'
+import { captureFrame, type CapturedFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
+import { canvasToBytes } from '@/lib/image'
 import {
   isBlockingOverlayOpen,
   isInteractiveTarget,
@@ -17,10 +19,12 @@ import {
   isOverlayOpen,
   isTypingTarget
 } from '@/lib/keyboard'
+import { useBurstStore } from '@/stores/burst'
 import { useCameraStore } from '@/stores/camera'
 import { useEditorStore } from '@/stores/editor'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
+import BurstBar from './BurstBar.vue'
 import CameraStatusOverlay from './CameraStatusOverlay.vue'
 import PauseButton from './PauseButton.vue'
 import ShutterButton from './ShutterButton.vue'
@@ -39,6 +43,7 @@ const camera = useCameraStore()
 const settings = useSettingsStore()
 const editor = useEditorStore()
 const panels = usePanelsStore()
+const burst = useBurstStore()
 
 const video = ref<HTMLVideoElement | null>(null)
 const viewport = ref<HTMLElement | null>(null)
@@ -86,17 +91,31 @@ watch([() => props.active, () => camera.paused], ([active, paused]) => {
   else if (active) void video.value?.play().catch(() => undefined)
 })
 
-async function capture(): Promise<void> {
+/**
+ * Takes a picture and opens it in the editor – or, with `direct` (burst capture), saves it and
+ * stays in the live view, ready for the next one right away.
+ */
+function capture(direct = burst.enabled): void {
   if (!canCapture.value || !video.value) return
+  let frame: CapturedFrame
+  try {
+    frame = captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
+  } catch (err) {
+    toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
+    return
+  }
+  emit('captured')
+  // Zoom and frame width carry a calibration of the camera over to this picture.
+  const info = { zoom: camera.zoom, frameWidth: frame.frameWidth }
+  if (direct) void burst.save(frame, info)
+  else void openInEditor(frame, info)
+}
+
+async function openInEditor(frame: CapturedFrame, info: CaptureInfo): Promise<void> {
   capturing.value = true
   try {
-    const frame = await captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
-    emit('captured')
-    // Zoom and frame width carry a calibration of the camera over to this picture.
-    editor.openCapture(frame.bytes, frame.width, frame.height, {
-      zoom: camera.zoom,
-      frameWidth: frame.frameWidth
-    })
+    const bytes = await canvasToBytes(frame.canvas)
+    editor.openCapture(bytes, frame.width, frame.height, info)
     // A side panel (e.g. the gallery, open during a photo button press) would cover the editor.
     panels.closeAll()
   } catch (err) {
@@ -122,7 +141,8 @@ useEventListener(
     if (isInteractiveTarget(e.target) && isKeyboardNavigating()) return
     e.preventDefault()
     e.stopPropagation()
-    void capture()
+    // Shift+Space saves the picture without the editor, also when burst capture is off.
+    capture(e.shiftKey || burst.enabled)
   },
   // Capture phase: runs before the focused control's own Space handling.
   { capture: true }
@@ -130,10 +150,11 @@ useEventListener(
 
 // Capture from elsewhere, e.g. a device's photo button: only in the live view and only while no
 // dialog or menu is open (the user is busy with something else then). Side panels like the
-// gallery leave the camera visible, so the button works with them like the zoom buttons do.
+// gallery leave the camera visible, so the button works with them like the zoom buttons do – in
+// burst capture the gallery stays open and shows each new picture.
 camera.onCaptureRequest(() => {
   if (!props.active || isBlockingOverlayOpen()) return
-  void capture()
+  capture()
 })
 
 // P pauses the camera and resumes it – shown and available like the pause button.
@@ -189,6 +210,14 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 
     <CameraStatusOverlay />
 
+    <!-- While burst capture is on: counter and target project, at the top like a mode banner. -->
+    <div
+      v-if="burst.enabled && playing"
+      class="pointer-events-none absolute inset-x-4 top-4 flex justify-center"
+    >
+      <BurstBar class="pointer-events-auto" />
+    </div>
+
     <!-- Bottom controls on one line: zoom left, shutter centred, pause right next to it and mirror
          right. The row lets clicks through (pointer-events-none) so it never covers anything; only
          the controls catch them. -->
@@ -200,7 +229,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       </div>
 
       <div class="pointer-events-auto">
-        <ShutterButton :disabled="!canCapture" @click="capture" />
+        <ShutterButton
+          :disabled="!canCapture"
+          :burst="burst.enabled"
+          @click="capture($event.shiftKey || burst.enabled)"
+        />
       </div>
 
       <div class="flex items-center gap-4">
@@ -209,7 +242,12 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
         <div v-if="camera.status === 'live' || camera.paused" class="pointer-events-auto">
           <PauseButton :paused="camera.paused" @click="camera.setPaused(!camera.paused)" />
         </div>
-        <div v-if="playing" class="glass-panel pointer-events-auto ml-auto p-1">
+        <div v-if="playing" class="glass-panel pointer-events-auto ml-auto flex gap-1 p-1">
+          <HintTooltip label="Serienaufnahme – jedes Bild sofort speichern" side="top">
+            <Toggle v-model="burst.enabled" aria-label="Serienaufnahme">
+              <ImagesIcon />
+            </Toggle>
+          </HintTooltip>
           <HintTooltip label="Bild spiegeln" side="top">
             <Toggle
               :model-value="settings.mirror"
