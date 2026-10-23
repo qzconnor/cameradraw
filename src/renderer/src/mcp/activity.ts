@@ -53,10 +53,22 @@ const ACTIVITIES: Record<string, string> = {
 export const activityOf = (tool: string | null | undefined): string =>
   (tool && ACTIVITIES[tool]) || 'arbeitet'
 
+/**
+ * Clients whose own name means nothing to the user: the Claude app introduces itself as
+ * `claude-ai`, and in its agent mode (Cowork) by an internal name, "Local Agent Mode" followed by
+ * the server's name.
+ */
+const KNOWN_CLIENTS: [RegExp, string][] = [
+  [/^claude[-_ ]ai$/i, 'Claude'],
+  [/^local[-_ ]?agent[-_ ]?mode\b/i, 'Claude']
+]
+
 /** The client's name as it introduced itself – `claude-code` reads as "Claude Code". */
 export function clientLabel(name: string | null | undefined): string {
   const trimmed = name?.trim()
   if (!trimmed) return 'KI'
+  const known = KNOWN_CLIENTS.find(([pattern]) => pattern.test(trimmed))
+  if (known) return known[1]
   if (/[A-Z ]/.test(trimmed)) return trimmed
   return trimmed
     .split(/[-_]+/)
