@@ -1,8 +1,8 @@
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
 import type { CaptureInfo, EditorDocument } from '@shared/types'
-import type { DrawStyle, Tool } from '@/editor/tools'
+import { isShapeTool, type DrawStyle, type ShapeTool, type Tool } from '@/editor/tools'
 import { bytesToObjectUrl, canvasToBytes, imageSize } from '@/lib/image'
 import { useCameraStore } from './camera'
 import { useSettingsStore } from './settings'
@@ -57,6 +57,11 @@ export const useEditorStore = defineStore('editor', () => {
   const strokeWidth = useLocalStorage('cameradraw.strokeWidth', 8)
   const fontSize = useLocalStorage('cameradraw.fontSize', 48)
   const filled = useLocalStorage('cameradraw.filled', false)
+  /** The shape picked last – the shapes button of the toolbar stands for it. */
+  const shapeTool = useLocalStorage<ShapeTool>('cameradraw.shapeTool', 'rect')
+  watch(tool, (value) => isShapeTool(value) && (shapeTool.value = value), { immediate: true })
+  /** Colour of space added around the picture (e.g. white for notes beside it). */
+  const extendColor = useLocalStorage('cameradraw.extendColor', '#ffffff')
   const style = computed<DrawStyle>(() => ({
     color: color.value,
     strokeWidth: strokeWidth.value,
@@ -206,6 +211,8 @@ export const useEditorStore = defineStore('editor', () => {
     strokeWidth,
     fontSize,
     filled,
+    shapeTool,
+    extendColor,
     style,
     guard,
     confirmPending,

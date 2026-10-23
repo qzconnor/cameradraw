@@ -206,3 +206,43 @@ test('Strg+D duplicates; arrow keys move the selection in one undo step', async 
   await change(page, 'Control+z')
   expect(await saved(page, workspace.library)).toHaveLength(1)
 })
+
+test('one button holds line, arrow, rectangle and ellipse – and the fill for new ones', async ({
+  page,
+  workspace
+}) => {
+  await openImage(page, 'Probe.png')
+  await page.keyboard.press('p')
+  const shapes = page.getByRole('button', { name: 'Formen', exact: true })
+  const choice = page.getByRole('dialog', { name: 'Formen' })
+
+  // A click picks the shape used last (a rectangle at first) and shows all of them.
+  await shapes.click()
+  await expect(choice).toBeVisible()
+  expect(await storeValue(page, 'editor', 'tool')).toBe('rect')
+  await choice.getByRole('button', { name: /^Ellipse/ }).click()
+  await expect(choice).toBeHidden()
+  expect(await storeValue(page, 'editor', 'tool')).toBe('ellipse')
+
+  await shapes.click()
+  await choice.getByRole('switch', { name: /Füllen/ }).click()
+  expect(await storeValue(page, 'editor', 'filled')).toBe(true)
+  // A click on the button again closes the choice.
+  await shapes.click()
+  await expect(choice).toBeHidden()
+
+  await drag(page, await canvasPoint(page, 0.3, 0.3), await canvasPoint(page, 0.5, 0.5))
+  const [ellipse] = (await saved(page, workspace.library)) as (Saved & { fill: string })[]
+  expect(ellipse.cdKind).toBe('ellipse')
+  expect(ellipse.fill).not.toBe('transparent')
+
+  // A shape's key picks it as well – the button stands for it from then on.
+  await page.keyboard.press('a')
+  await page.keyboard.press('p')
+  await shapes.click()
+  expect(await storeValue(page, 'editor', 'tool')).toBe('arrow')
+  await expect(choice.getByRole('button', { name: /^Pfeil/ })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  )
+})

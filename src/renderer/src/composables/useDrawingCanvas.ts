@@ -22,6 +22,7 @@ import {
   sizeAfter,
   toCanvas,
   turnOf,
+  type Side,
   type Size
 } from '@/editor/adjust'
 import { CanvasHistory } from '@/editor/history'
@@ -53,6 +54,8 @@ const HIGHLIGHTER_WIDTH_FACTOR = 3
 const TEXT_FONT = '"Geist Variable", sans-serif'
 /** Zoom range on top of the fitted image (1 = whole image visible). */
 export const MAX_VIEW_ZOOM = 8
+/** Below 1 only to leave room beside the picture, e.g. while space is added to it. */
+export const MIN_ROOM_ZOOM = 0.1
 /** One zoom step of the + / − keys and buttons – like in the camera view. */
 const VIEW_ZOOM_STEP = 0.5
 /** Zoom per wheel delta unit: one mouse wheel notch (100) zooms by about 16 %. */
@@ -172,7 +175,13 @@ export interface DrawingCanvas {
   /** Changes whenever the view moves (zoom, pan, resize) – for overlays that follow it. */
   viewVersion: Ref<number>
   load(options: LoadImageOptions): Promise<void>
-  setViewZoom(value: number): void
+  /** Zooms the view to `value`; `min` below 1 lets the picture shrink to leave room beside it. */
+  setViewZoom(value: number, min?: number): void
+  /**
+   * Shows the whole picture with room for `room` image pixels beside its sides (zooming out below
+   * 1 if needed) – e.g. for a preview of space being added. Without any room: the whole picture.
+   */
+  showRoom(room: Partial<Record<Side, number>>): void
   /** Zooms in (1) or out (−1) by one step, like the + / − keys. */
   stepViewZoom(direction: 1 | -1): void
   /** Shows the whole image again. */
@@ -365,7 +374,9 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       width / 2 - center.x * zoom,
       height / 2 - center.y * zoom
     ])
-    canvas.requestRenderAll()
+    // Right away: resizing cleared the canvas, and a render on the next frame would come after the
+    // next resize when the view changes every frame (zooming out while space is dragged).
+    canvas.renderAll()
     viewVersion.value++
   }
 
@@ -375,7 +386,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
    * Zooms to `value` (1 = whole image). The point at `anchor` (host coordinates, e.g. the mouse
    * pointer) stays where it is; without one the middle does.
    */
-  function setViewZoom(value: number, anchor?: XY): void {
+  function setViewZoom(value: number, anchor?: XY, min = 1): void {
     const el = host.value
     if (!canvas || !el || !size.width) return
     // The canvas is centred in the host, so the host's middle shows `center`.
@@ -383,7 +394,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       ? { x: anchor.x - el.clientWidth / 2, y: anchor.y - el.clientHeight / 2 }
       : { x: 0, y: 0 }
     const fixed = { x: center.x + offset.x / zoom, y: center.y + offset.y / zoom }
-    viewZoom.value = Math.round(clamp(value, 1, MAX_VIEW_ZOOM) * 100) / 100
+    viewZoom.value = Math.round(clamp(value, min, MAX_VIEW_ZOOM) * 1000) / 1000
     const next = fitZoom(el) * viewZoom.value
     center = { x: fixed.x - offset.x / next, y: fixed.y - offset.y / next }
     layout()
@@ -394,6 +405,24 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
   function resetView(): void {
     viewZoom.value = 1
+    center = { x: size.width / 2, y: size.height / 2 }
+    layout()
+  }
+
+  function showRoom({
+    top = 0,
+    right = 0,
+    bottom = 0,
+    left = 0
+  }: Partial<Record<Side, number>>): void {
+    const el = host.value
+    if (!canvas || !el || !size.width) return
+    // The picture stays in the middle, so the wider room is needed on both sides.
+    const needed = Math.min(
+      el.clientWidth / (size.width + 2 * Math.max(left, right)),
+      el.clientHeight / (size.height + 2 * Math.max(top, bottom))
+    )
+    viewZoom.value = clamp(needed / fitZoom(el), MIN_ROOM_ZOOM, 1)
     center = { x: size.width / 2, y: size.height / 2 }
     layout()
   }
@@ -1359,7 +1388,8 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     adjustmentCount,
     viewVersion,
     load,
-    setViewZoom: (value: number) => setViewZoom(value),
+    setViewZoom: (value: number, min?: number) => setViewZoom(value, undefined, min),
+    showRoom,
     stepViewZoom,
     resetView,
     micronsPerPixel,

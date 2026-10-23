@@ -23,7 +23,9 @@ die auch später noch Form für Form bearbeitbar bleiben.
 
 - **Einfrieren und zeichnen** – `Leertaste` oder die Foto-Taste am Mikroskop hält das Bild an.
   Stift, Textmarker, Linie, Pfeil, Rechteck, Ellipse, Text und Radierer, dazu Rückgängig und
-  Wiederholen. Für Details lässt sich das Bild bis 8× vergrößern und verschieben.
+  Wiederholen. Linie, Pfeil, Rechteck und Ellipse teilen sich einen Knopf – ein Klick zeigt alle
+  (wie bei der Farbe), samt „Füllen“. Für Details lässt sich das Bild bis 8× vergrößern und
+  verschieben.
 - **Serienaufnahme** – Viele Bilder hintereinander, ohne jedes Mal den Editor: Mit eingeschalteter
   Serienaufnahme speichern `Leertaste`, Auslöser und Foto-Taste das Bild sofort ins gewählte
   Projekt, `Shift+Leertaste` tut das auch einzeln. Gezeichnet werden kann später – „Bearbeiten“ im
@@ -35,9 +37,12 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Zeilenumbruch und jede Leerzeile bleibt.
 - **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
   Lineal, siehe unten).
-- **Bild drehen, entzerren, erweitern** – Im Menü „Bild“ des Editors: um 90° drehen, perspektivisch
-  zuschneiden (vier Ecken auf die Kanten ziehen, z. B. eines schräg fotografierten Chips – das
-  Viereck wird zum geraden Rechteck) und eine Fläche anfügen, etwa rechts für Beschriftungen.
+- **Bild drehen, entzerren, erweitern** – Mit den Knöpfen links neben den Werkzeugen: um 90° drehen,
+  perspektivisch zuschneiden (vier Ecken auf die Kanten ziehen, z. B. eines schräg fotografierten
+  Chips – das Viereck wird zum geraden Rechteck) und eine Fläche anfügen, etwa rechts für
+  Beschriftungen. Für die Fläche reicht es, an einer Bildkante zu ziehen – eine Vorschau zeigt sie
+  samt Größe, am Fensterrand zoomt die Ansicht heraus, `Shift` rastet in Vierteln des Bildes ein.
+  Klick oder Rechtsklick auf die Kante fragt nach der genauen Breite in Pixeln und der Farbe.
   Gezeichnete Formen wandern mit; alles lässt sich rückgängig machen, das Original bleibt erhalten.
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
   füllen, kopieren, duplizieren, nach vorne oder hinten legen, löschen, alles auswählen.
@@ -117,6 +122,8 @@ später in den Einstellungen ändern.
 | `L` `A` `R` `O` `T`  | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
 | `D`                  | Messen – Strecke mit Längenangabe (`Shift` = gerade)                   |
 | `C`                  | Perspektivisch zuschneiden: Ecken ziehen (Pfeiltasten: 1 px), `Enter`  |
+| Bildkante ziehen     | Fläche anfügen (`Shift` = Viertel des Bildes, `Esc` bricht ab)         |
+| Klick auf Bildkante  | Fläche anfügen mit Breite in Pixeln oder %, Farbe (auch Rechtsklick)   |
 | Rechtsklick          | Text / Kopiertes hier einfügen, Kopieren, Duplizieren, Füllen, Löschen |
 | `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
 | `Strg+B` / `Strg+I`  | Beim Schreiben: Auswahl fett / kursiv (Markdown)                       |

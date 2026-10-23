@@ -34,6 +34,14 @@ export interface ToolDefinition {
   shortcut: string
 }
 
+/** One button in the toolbar that opens the choice – like the colour. */
+export const SHAPE_TOOLS: ToolDefinition[] = [
+  { id: 'line', label: 'Linie', icon: MinusIcon, shortcut: 'L' },
+  { id: 'arrow', label: 'Pfeil', icon: ArrowUpRightIcon, shortcut: 'A' },
+  { id: 'rect', label: 'Rechteck', icon: SquareIcon, shortcut: 'R' },
+  { id: 'ellipse', label: 'Ellipse', icon: CircleIcon, shortcut: 'O' }
+]
+
 export const TOOL_GROUPS: ToolDefinition[][] = [
   [{ id: 'select', label: 'Auswählen & verschieben', icon: MousePointer2Icon, shortcut: 'V' }],
   [
@@ -41,12 +49,7 @@ export const TOOL_GROUPS: ToolDefinition[][] = [
     { id: 'highlighter', label: 'Textmarker', icon: HighlighterIcon, shortcut: 'M' },
     { id: 'eraser', label: 'Radierer', icon: EraserIcon, shortcut: 'E' }
   ],
-  [
-    { id: 'line', label: 'Linie', icon: MinusIcon, shortcut: 'L' },
-    { id: 'arrow', label: 'Pfeil', icon: ArrowUpRightIcon, shortcut: 'A' },
-    { id: 'rect', label: 'Rechteck', icon: SquareIcon, shortcut: 'R' },
-    { id: 'ellipse', label: 'Ellipse', icon: CircleIcon, shortcut: 'O' }
-  ],
+  SHAPE_TOOLS,
   [{ id: 'text', label: 'Text', icon: TypeIcon, shortcut: 'T' }],
   [{ id: 'measure', label: 'Messen', icon: RulerIcon, shortcut: 'D' }]
 ]
