@@ -72,9 +72,13 @@ export async function downloadUpdate(): Promise<void> {
   }
 }
 
-/** Quits, runs the installer and starts the new version afterwards. */
+/**
+ * Quits, runs the installer and starts the new version afterwards. Silently: the installer has
+ * pages, but an update keeps the folder and mode of the installation, and only a silent install
+ * starts the app again by itself.
+ */
 export function installUpdate(): void {
-  if (state.status === 'downloaded') autoUpdater.quitAndInstall(false, true)
+  if (state.status === 'downloaded') autoUpdater.quitAndInstall(true, true)
 }
 
 export function startUpdater(): void {

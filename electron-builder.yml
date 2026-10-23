@@ -27,6 +27,10 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  # Installer with pages, so the installation folder can be chosen. Updates skip the folder page
+  # and install into the folder of the previous installation.
+  oneClick: false
+  allowToChangeInstallationDirectory: true
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
