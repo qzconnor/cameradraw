@@ -24,6 +24,10 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Einfrieren und zeichnen** – `Leertaste` oder die Foto-Taste am Mikroskop hält das Bild an.
   Stift, Textmarker, Linie, Pfeil, Rechteck, Ellipse, Text und Radierer, dazu Rückgängig und
   Wiederholen. Für Details lässt sich das Bild bis 8× vergrößern und verschieben.
+- **Serienaufnahme** – Viele Bilder hintereinander, ohne jedes Mal den Editor: Mit eingeschalteter
+  Serienaufnahme speichern `Leertaste`, Auslöser und Foto-Taste das Bild sofort ins gewählte
+  Projekt, `Shift+Leertaste` tut das auch einzeln. Gezeichnet werden kann später – „Bearbeiten“ im
+  Hinweis oder in der Galerie.
 - **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
   Lineal, siehe unten).
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
@@ -82,7 +86,8 @@ später in den Einstellungen ändern.
 
 | Taste                | Aktion                                                                                   |
 | -------------------- | ---------------------------------------------------------------------------------------- |
-| `Leertaste`          | Kamerabild anhalten und den Editor öffnen                                                |
+| `Leertaste`          | Kamerabild anhalten und den Editor öffnen – in der Serienaufnahme: direkt speichern      |
+| `Shift+Leertaste`    | Bild direkt speichern, ohne Editor (Name mit Uhrzeit, ins zuletzt gewählte Projekt)      |
 | Foto-Taste am Gerät  | wie `Leertaste`, auch bei offener Galerie (USB-Mikroskop, braucht den Hintergrunddienst) |
 | `+` / `−` / `0`      | Zoom vergrößern / verkleinern / zurücksetzen (auch per Mausrad)                          |
 | Zoom-Tasten am Gerät | wie `+` / `−` (USB-Mikroskop, ohne Hintergrunddienst)                                    |
@@ -247,7 +252,8 @@ src/
   preload/           window.api (contextBridge, sandboxed)
   renderer/src/
     stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom), gallery (Projekte,
-                     Suche, Sortierung), editor, updates, panels, hardware, modules
+                     Suche, Sortierung), editor, burst (Serienaufnahme), updates, panels,
+                     hardware, modules
     composables/     useDrawingCanvas (fabric.js-Canvas, Werkzeuge, Undo/Redo, Export),
                      useGalleryDrag (Drag & Drop in der Galerie)
     editor/          Werkzeug-Definitionen, Formen, History

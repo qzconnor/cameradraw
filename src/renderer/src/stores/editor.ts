@@ -201,6 +201,7 @@ export const useEditorStore = defineStore('editor', () => {
     guard,
     confirmPending,
     cancelPending,
+    scaleOfCapture,
     openCapture,
     openFromGallery,
     pathChanged,

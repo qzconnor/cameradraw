@@ -70,6 +70,7 @@ onMounted(async () => {
     <UpdatesSheet />
     <SetupDialog />
     <DiscardChangesDialog />
-    <Toaster theme="dark" position="bottom-right" :offset="16" />
+    <!-- Above the controls at the bottom (mirror, zoom, scale), so a toast never covers them. -->
+    <Toaster theme="dark" position="bottom-right" :offset="{ right: 16, bottom: 96 }" />
   </TooltipProvider>
 </template>
