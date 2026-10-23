@@ -4,7 +4,7 @@ import { useEventListener } from '@vueuse/core'
 // Left/right mirror icon (vertical centre line). Lucide's old `FlipHorizontal2` alias shows up/down.
 import { ImagesIcon, TrianglesCenterlineDashedVerticalIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
-import type { CaptureInfo } from '@shared/types'
+import type { CaptureInfo, GalleryItem } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import HintTooltip from '@/components/common/HintTooltip.vue'
 import { Toggle } from '@/components/ui/toggle'
@@ -12,6 +12,7 @@ import { useVideoPicture } from '@/composables/useVideoPicture'
 import { captureFrame, type CapturedFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import { canvasToBytes } from '@/lib/image'
+import { provideRemote } from '@/mcp/remote'
 import {
   isBlockingOverlayOpen,
   isInteractiveTarget,
@@ -93,22 +94,29 @@ watch([() => props.active, () => camera.paused], ([active, paused]) => {
 
 /**
  * Takes a picture and opens it in the editor – or, with `direct` (burst capture), saves it and
- * stays in the live view, ready for the next one right away.
+ * stays in the live view, ready for the next one right away. Resolves with the saved image
+ * (`direct`); rejects if that failed, after saying so in a toast.
  */
-function capture(direct = burst.enabled): void {
-  if (!canCapture.value || !video.value) return
+async function capture(direct = burst.enabled): Promise<GalleryItem | null> {
+  if (!canCapture.value || !video.value) return null
   let frame: CapturedFrame
   try {
     frame = captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
   } catch (err) {
     toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
-    return
+    throw err
   }
   emit('captured')
   // Zoom and frame width carry a calibration of the camera over to this picture.
   const info = { zoom: camera.zoom, frameWidth: frame.frameWidth }
-  if (direct) void burst.save(frame, info)
-  else void openInEditor(frame, info)
+  if (direct) return burst.save(frame, info)
+  await openInEditor(frame, info)
+  return null
+}
+
+/** Capture by key, button or device – failures are shown as toasts. */
+function shoot(direct = burst.enabled): void {
+  capture(direct).catch(() => undefined)
 }
 
 async function openInEditor(frame: CapturedFrame, info: CaptureInfo): Promise<void> {
@@ -120,10 +128,16 @@ async function openInEditor(frame: CapturedFrame, info: CaptureInfo): Promise<vo
     panels.closeAll()
   } catch (err) {
     toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
+    throw err
   } finally {
     capturing.value = false
   }
 }
+
+provideRemote('camera', {
+  canCapture: () => canCapture.value && !!video.value?.videoWidth,
+  capture
+})
 
 function onWheel(e: WheelEvent): void {
   if (!isLive.value || !e.deltaY) return
@@ -142,7 +156,7 @@ useEventListener(
     e.preventDefault()
     e.stopPropagation()
     // Shift+Space saves the picture without the editor, also when burst capture is off.
-    capture(e.shiftKey || burst.enabled)
+    shoot(e.shiftKey || burst.enabled)
   },
   // Capture phase: runs before the focused control's own Space handling.
   { capture: true }
@@ -154,7 +168,7 @@ useEventListener(
 // burst capture the gallery stays open and shows each new picture.
 camera.onCaptureRequest(() => {
   if (!props.active || isBlockingOverlayOpen()) return
-  capture()
+  shoot()
 })
 
 // P pauses the camera and resumes it – shown and available like the pause button.
@@ -232,7 +246,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
         <ShutterButton
           :disabled="!canCapture"
           :burst="burst.enabled"
-          @click="capture($event.shiftKey || burst.enabled)"
+          @click="shoot($event.shiftKey || burst.enabled)"
         />
       </div>
 

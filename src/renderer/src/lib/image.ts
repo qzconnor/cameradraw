@@ -45,3 +45,14 @@ export function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(m[1], 16)
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
 }
+
+/** `rgba(r, g, b, a)` or `#rrggbb` → `#rrggbb`; anything else (e.g. `transparent`) → ''. */
+export function toHex(color: string): string {
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase()
+  const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(color)
+  if (!m) return ''
+  return `#${m
+    .slice(1, 4)
+    .map((n) => Number(n).toString(16).padStart(2, '0'))
+    .join('')}`
+}

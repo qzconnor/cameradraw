@@ -12,6 +12,7 @@ import { TOOLS } from '@/editor/tools'
 import { errorMessage } from '@/lib/format'
 import { encodingFor } from '@/lib/image'
 import { isOverlayOpen, isTypingTarget } from '@/lib/keyboard'
+import { provideRemote } from '@/mcp/remote'
 import { useCameraStore } from '@/stores/camera'
 import { useEditorStore, type EditorSession } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
@@ -40,6 +41,7 @@ const saving = ref(false)
 /** The save dialog asks for the file name and the project first. */
 const saveOpen = ref(false)
 
+const canvas = useDrawingCanvas({ host, tool, style })
 const {
   ready,
   canUndo,
@@ -76,7 +78,7 @@ const {
   resetView,
   micronsPerPixel,
   setScale
-} = useDrawingCanvas({ host, tool, style })
+} = canvas
 
 onMounted(async () => {
   try {
@@ -224,11 +226,15 @@ function requestSaveAs(): void {
 const placeOf = (item: GalleryItem): string =>
   item.project ? `${item.project} / ${item.name}` : item.name
 
-async function save(
+/**
+ * Writes the picture with its layers to `target`, then stays open – showing the saved image from
+ * now on – or goes back to the camera. Throws if saving failed.
+ */
+async function saveTo(
   target: string,
   { copy = false, stayOpen = false }: { copy?: boolean; stayOpen?: boolean } = {}
-): Promise<void> {
-  if (saving.value) return
+): Promise<GalleryItem> {
+  if (saving.value) throw new Error('Das Bild wird gerade gespeichert.')
   saving.value = true
   try {
     // An undo or paste pressed just before is part of the saved image.
@@ -249,8 +255,10 @@ async function save(
     markSaved(document)
     saveOpen.value = false
     if (stayOpen) {
+      // Saved under another name or as a copy: that is the image being edited now.
+      if (item.path !== props.session.path) editor.savedAs(item.path)
       toast.success('Gespeichert', { description: placeOf(item) })
-      return
+      return item
     }
     toast.success(copy ? 'Kopie gespeichert' : 'Bild gespeichert', {
       description: placeOf(item),
@@ -264,23 +272,46 @@ async function save(
       }
     })
     editor.close()
-  } catch (err) {
-    toast.error('Speichern fehlgeschlagen', { description: errorMessage(err) })
+    return item
   } finally {
     saving.value = false
   }
 }
 
+async function save(
+  target: string,
+  options: { copy?: boolean; stayOpen?: boolean } = {}
+): Promise<void> {
+  if (saving.value) return
+  try {
+    await saveTo(target, options)
+  } catch (err) {
+    toast.error('Speichern fehlgeschlagen', { description: errorMessage(err) })
+  }
+}
+
 /** Puts the picture with its drawing on the clipboard, e.g. for a document or a chat. */
+async function copyImage(): Promise<void> {
+  await window.api.clipboard.writeImage(await exportImage())
+  toast.success('Bild kopiert', { description: 'Mit Zeichnung – zum Einfügen bereit.' })
+}
+
 async function copyToClipboard(): Promise<void> {
   if (!ready.value) return
   try {
-    await window.api.clipboard.writeImage(await exportImage())
-    toast.success('Bild kopiert', { description: 'Mit Zeichnung – zum Einfügen bereit.' })
+    await copyImage()
   } catch (err) {
     toast.error('Kopieren fehlgeschlagen', { description: errorMessage(err) })
   }
 }
+
+provideRemote('editor', {
+  baseUrl: props.session.baseUrl,
+  canvas,
+  save: saveTo,
+  copyImage,
+  calibrate
+})
 
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (isOverlayOpen()) return

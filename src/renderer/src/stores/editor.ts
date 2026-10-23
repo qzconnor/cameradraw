@@ -131,31 +131,34 @@ export const useEditorStore = defineStore('editor', () => {
     })
   }
 
+  /** Opens an image of the gallery right away – unsaved changes are dropped. */
+  async function load(path: string): Promise<void> {
+    loading.value = true
+    try {
+      const loaded = await window.api.library.load(path)
+      const base =
+        loaded.baseMime === 'image/png' ? loaded.base : await toPng(loaded.base, loaded.baseMime)
+      const baseUrl = bytesToObjectUrl(base, 'image/png')
+      const { width, height } = await imageSize(baseUrl)
+      setSession({
+        path,
+        baseUrl,
+        baseBytes: base,
+        width,
+        height,
+        document: loaded.document,
+        capturedAt: loaded.capturedAt,
+        micronsPerPixel: loaded.document?.micronsPerPixel ?? null,
+        capture: loaded.document?.capture ?? { zoom: 1, frameWidth: width }
+      })
+    } finally {
+      loading.value = false
+    }
+  }
+
   function openFromGallery(path: string): void {
     if (session.value?.path === path) return
-    guard(async () => {
-      loading.value = true
-      try {
-        const loaded = await window.api.library.load(path)
-        const base =
-          loaded.baseMime === 'image/png' ? loaded.base : await toPng(loaded.base, loaded.baseMime)
-        const baseUrl = bytesToObjectUrl(base, 'image/png')
-        const { width, height } = await imageSize(baseUrl)
-        setSession({
-          path,
-          baseUrl,
-          baseBytes: base,
-          width,
-          height,
-          document: loaded.document,
-          capturedAt: loaded.capturedAt,
-          micronsPerPixel: loaded.document?.micronsPerPixel ?? null,
-          capture: loaded.document?.capture ?? { zoom: 1, frameWidth: width }
-        })
-      } finally {
-        loading.value = false
-      }
-    })
+    guard(() => load(path))
   }
 
   /**
@@ -169,6 +172,11 @@ export const useEditorStore = defineStore('editor', () => {
     else if (current.path.startsWith(`${from}/`)) {
       session.value = { ...current, path: to + current.path.slice(from.length) }
     }
+  }
+
+  /** The open image was saved under `path` and stays open – e.g. a new capture now has a name. */
+  function savedAs(path: string): void {
+    if (session.value) session.value = { ...session.value, path }
   }
 
   /** True if the open image lies at `path` or, for a project name, inside that project. */
@@ -190,6 +198,7 @@ export const useEditorStore = defineStore('editor', () => {
     session,
     isOpen,
     dirty,
+    unsaved,
     loading,
     pendingAction,
     tool,
@@ -203,8 +212,10 @@ export const useEditorStore = defineStore('editor', () => {
     cancelPending,
     scaleOfCapture,
     openCapture,
+    load,
     openFromGallery,
     pathChanged,
+    savedAs,
     isEditing,
     close,
     requestClose

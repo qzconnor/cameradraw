@@ -5,7 +5,9 @@ import {
   Canvas,
   FabricImage,
   IText,
+  Path,
   PencilBrush,
+  Point,
   util,
   type FabricObject,
   type TPointerEvent,
@@ -16,15 +18,17 @@ import type { EditorDocument } from '@shared/types'
 import { CanvasHistory } from '@/editor/history'
 import {
   createMeasure,
+  formatLength,
   isMeasure,
   lockMeasure,
+  measureLine,
   measuredLength,
   relabel,
   restyleMeasure
 } from '@/editor/measure'
-import { CUSTOM_PROPS, createShape, kindOf, snapAngle, tag } from '@/editor/shapes'
-import { isShapeTool, type DrawStyle, type Tool } from '@/editor/tools'
-import { canvasToBytes, withAlpha } from '@/lib/image'
+import { CUSTOM_PROPS, createShape, kindOf, snapAngle, tag, type ObjectKind } from '@/editor/shapes'
+import { isShapeTool, type DrawStyle, type ShapeTool, type Tool } from '@/editor/tools'
+import { canvasToBytes, toHex, withAlpha } from '@/lib/image'
 import {
   isInteractiveTarget,
   isKeyboardNavigating,
@@ -78,6 +82,39 @@ export interface LoadImageOptions {
 
 export type StyleChange = 'color' | 'strokeWidth' | 'fontSize'
 
+/** Changes to objects: style values as in the toolbar, and the text of a text. */
+export type ObjectChange = Partial<DrawStyle> & { text?: string }
+
+/**
+ * A shape drawn without the mouse (remote control), in image pixels. Style values as in the
+ * toolbar; missing ones are taken from the current style.
+ */
+export type ShapeSpec = Partial<DrawStyle> &
+  (
+    | { type: ShapeTool | 'measure'; from: XY; to: XY }
+    | { type: 'pen' | 'highlighter'; points: XY[] }
+    | { type: 'text'; at: XY; text: string }
+  )
+
+/** A drawn object as described to the remote control. */
+export interface DrawnObject {
+  /** Position in the stacking order, 0 = bottom. */
+  index: number
+  kind: ObjectKind | null
+  /** Bounding box in image pixels. */
+  box: { left: number; top: number; width: number; height: number }
+  color: string | null
+  /** Line width as in the toolbar. */
+  strokeWidth?: number
+  filled?: boolean
+  text?: string
+  fontSize?: number
+  /** Measuring lines: the length as shown, and in image pixels. */
+  length?: string
+  lengthPixels?: number
+  selected: boolean
+}
+
 /** What is under the pointer – for the canvas context menu. */
 export interface CanvasSpot {
   /** Pointer position in scene (image) coordinates. */
@@ -126,6 +163,8 @@ export interface DrawingCanvas {
   deleteSelection(): void
   clearAll(): void
   applyStyleToSelection(change: StyleChange): void
+  /** Changes style or text of `objects` (one undo step). */
+  restyle(objects: FabricObject[], change: ObjectChange): void
   /** Looks at what is under the pointer of a (context menu) mouse event. */
   inspectAt(e: MouseEvent): CanvasSpot
   /** Adds a text at `point` and starts typing; the previous tool returns when the text is done. */
@@ -149,6 +188,17 @@ export interface DrawingCanvas {
   nudgeSelection(dx: number, dy: number): boolean
   /** Brings `objects` (default: the selection) in front of all others or behind them. */
   arrange(where: 'front' | 'back', objects?: FabricObject[]): void
+  /** The drawn objects in stacking order (bottom first). */
+  objects(): FabricObject[]
+  describeObjects(): DrawnObject[]
+  /** Draws shapes as if drawn by hand (one undo step) and returns them. */
+  drawShapes(specs: ShapeSpec[]): FabricObject[]
+  /** Selects `objects` with the select tool; none clears the selection. */
+  selectObjects(objects: FabricObject[]): void
+  /** Moves `objects` by `dx`/`dy` image pixels (one undo step). */
+  moveObjects(objects: FabricObject[], dx: number, dy: number): void
+  /** Zooms the view to `value` (1 = whole image), centred on `at` (image pixels) if given. */
+  setView(value: number, at?: XY): void
   /** Resolves once undo, redo and paste steps still being applied are done. */
   settled(): Promise<void>
   isEditingText(): boolean
@@ -435,33 +485,40 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     c.requestRenderAll()
   }
 
-  /** Applies a changed style setting to the currently selected objects. */
-  function applyStyleToSelection(change: StyleChange): void {
+  /** Changes style or text of `objects`; measuring lines only take colour and line width. */
+  function restyle(objects: FabricObject[], change: ObjectChange): void {
     const c = canvas
-    if (!c) return
-    const objects = c.getActiveObjects()
-    if (!objects.length) return
-    const { color, fontSize } = style.value
+    if (!c || !objects.length) return
+    const { color, strokeWidth, fontSize, filled, text } = change
 
     for (const obj of objects) {
       const kind = kindOf(obj)
       if (isMeasure(obj)) {
-        if (change === 'color') restyleMeasure(obj, { color })
-        else if (change === 'strokeWidth') restyleMeasure(obj, { strokeWidth: sceneStroke() })
-      } else if (change === 'color') {
+        restyleMeasure(obj, {
+          color,
+          strokeWidth: strokeWidth === undefined ? undefined : strokeWidth * unit
+        })
+        obj.setCoords()
+        continue
+      }
+      if (color !== undefined) {
         if (kind === 'text') obj.set('fill', color)
         else if (kind === 'highlighter') obj.set('stroke', withAlpha(color, HIGHLIGHTER_ALPHA))
         else if (kind === 'arrow') obj.set({ stroke: color, fill: color })
         else if (kind === 'rect' || kind === 'ellipse') {
           obj.set({ stroke: color, ...(obj.fill !== 'transparent' ? { fill: color } : {}) })
         } else obj.set('stroke', color)
-      } else if (change === 'strokeWidth' && kind && kind !== 'text') {
+      }
+      if (strokeWidth !== undefined && kind && kind !== 'text') {
         obj.set(
           'strokeWidth',
-          sceneStroke() * (kind === 'highlighter' ? HIGHLIGHTER_WIDTH_FACTOR : 1)
+          strokeWidth * unit * (kind === 'highlighter' ? HIGHLIGHTER_WIDTH_FACTOR : 1)
         )
-      } else if (change === 'fontSize' && kind === 'text') {
-        obj.set('fontSize', fontSize * unit)
+      }
+      if (fontSize !== undefined && kind === 'text') obj.set('fontSize', fontSize * unit)
+      if (text !== undefined && obj instanceof IText) obj.set('text', text)
+      if (filled !== undefined && isFillable(obj)) {
+        obj.set('fill', filled ? (obj.stroke as string) : 'transparent')
       }
       obj.setCoords()
     }
@@ -469,12 +526,16 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     commit()
   }
 
+  /** Applies a changed style setting to the currently selected objects. */
+  function applyStyleToSelection(change: StyleChange): void {
+    restyle(canvas?.getActiveObjects() ?? [], { [change]: style.value[change] })
+  }
+
   // ── Pointer interaction ─────────────────────────────────────────────────────
 
-  function addText(at: XY, e?: TPointerEvent): void {
-    const c = canvas!
-    const text = tag(
-      new IText('', {
+  function createText(at: XY, content: string, color: string, fontSize: number): IText {
+    return tag(
+      new IText(content, {
         left: at.x,
         top: at.y,
         // Anchor top-left so the text grows to the right while typing.
@@ -482,13 +543,18 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
         originY: 'top',
         fontFamily: TEXT_FONT,
         fontWeight: 600,
-        fontSize: style.value.fontSize * unit,
-        fill: style.value.color,
-        cursorColor: style.value.color,
+        fontSize: fontSize * unit,
+        fill: color,
+        cursorColor: color,
         editingBorderColor: '#3b82f6'
       }),
       'text'
     )
+  }
+
+  function addText(at: XY, e?: TPointerEvent): void {
+    const c = canvas!
+    const text = createText(at, '', style.value.color, style.value.fontSize)
     c.add(text)
     c.setActiveObject(text)
     text.enterEditing(e)
@@ -766,20 +832,22 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   }
 
   function setFilled(objects: FabricObject[], filled: boolean): void {
-    const targets = objects.filter(isFillable)
-    if (!targets.length) return
-    for (const obj of targets) obj.set('fill', filled ? (obj.stroke as string) : 'transparent')
-    canvas?.requestRenderAll()
-    commit()
+    restyle(objects.filter(isFillable), { filled })
+  }
+
+  function selectObjects(objects: FabricObject[]): void {
+    const c = canvas
+    if (!c) return
+    if (!objects.length) return finishInteraction()
+    tool.value = 'select'
+    applyTool() // objects become selectable right away, not only after the tool watcher
+    select(objects)
+    syncState()
   }
 
   function selectAll(): void {
     const c = canvas
-    if (!c || !c.getObjects().length) return
-    tool.value = 'select'
-    applyTool() // objects become selectable right away, not only after the tool watcher
-    select(c.getObjects())
-    syncState()
+    if (c?.getObjects().length) selectObjects(c.getObjects())
   }
 
   // ── Copy, paste and arrange ───────────────────────────────────────────────────
@@ -897,6 +965,112 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     commit()
   }
 
+  // ── Drawing and describing without the mouse (remote control) ─────────────────
+
+  function shapeFrom(spec: ShapeSpec): FabricObject {
+    const color = spec.color ?? style.value.color
+    const strokeWidth = (spec.strokeWidth ?? style.value.strokeWidth) * unit
+    switch (spec.type) {
+      case 'measure':
+        return createMeasure(
+          spec.from,
+          spec.to,
+          { color, strokeWidth, unit },
+          micronsPerPixel.value
+        )
+      case 'text':
+        return createText(spec.at, spec.text, color, spec.fontSize ?? style.value.fontSize)
+      case 'pen':
+      case 'highlighter': {
+        // Like the brush draws them: smoothed through the points.
+        const highlighter = spec.type === 'highlighter'
+        const points = spec.points.map((p) => new Point(p.x, p.y))
+        const path = new Path(util.getSmoothPathFromPoints(points), {
+          fill: null,
+          stroke: highlighter ? withAlpha(color, HIGHLIGHTER_ALPHA) : color,
+          strokeWidth: strokeWidth * (highlighter ? HIGHLIGHTER_WIDTH_FACTOR : 1),
+          strokeLineCap: highlighter ? 'square' : 'round',
+          strokeLineJoin: 'round',
+          strokeUniform: true
+        })
+        return tag(path, spec.type)
+      }
+      default:
+        return createShape(
+          spec.type,
+          spec.from,
+          spec.to,
+          { color, strokeWidth, filled: spec.filled ?? style.value.filled },
+          false
+        )
+    }
+  }
+
+  function drawShapes(specs: ShapeSpec[]): FabricObject[] {
+    const c = canvas
+    if (!c || !specs.length) return []
+    const shapes = specs.map(shapeFrom)
+    c.add(...shapes)
+    applyTool() // selectable or not, like everything else with the current tool
+    c.requestRenderAll()
+    commit()
+    return shapes
+  }
+
+  const round = (value: number, digits = 0): number =>
+    Math.round(value * 10 ** digits) / 10 ** digits
+
+  function describeObjects(): DrawnObject[] {
+    const c = canvas
+    if (!c) return []
+    const selected = c.getActiveObjects()
+    return c.getObjects().map((obj, index) => {
+      const kind = kindOf(obj) ?? null
+      const { left, top, width, height } = obj.getBoundingRect()
+      const stroke = isMeasure(obj) ? measureLine(obj) : obj
+      const info: DrawnObject = {
+        index,
+        kind,
+        box: { left: round(left), top: round(top), width: round(width), height: round(height) },
+        color: toHex(String((kind === 'text' ? obj.fill : stroke?.stroke) ?? '')) || null,
+        selected: selected.includes(obj)
+      }
+      if (kind === 'text' && obj instanceof IText) {
+        info.text = obj.text
+        info.fontSize = round(obj.fontSize / unit, 1)
+      } else if (stroke) {
+        const factor = kind === 'highlighter' ? HIGHLIGHTER_WIDTH_FACTOR : 1
+        info.strokeWidth = round(stroke.strokeWidth / unit / factor, 1)
+      }
+      if (isFillable(obj)) info.filled = obj.fill !== 'transparent'
+      if (isMeasure(obj)) {
+        info.lengthPixels = round(measuredLength(obj), 1)
+        info.length = formatLength(measuredLength(obj), micronsPerPixel.value)
+      }
+      return info
+    })
+  }
+
+  function moveObjects(objects: FabricObject[], dx: number, dy: number): void {
+    const c = canvas
+    if (!c || !objects.length) return
+    // Positions inside a multi-selection are relative to it.
+    c.discardActiveObject()
+    for (const obj of objects) {
+      obj.set({ left: obj.left + dx, top: obj.top + dy })
+      obj.setCoords()
+    }
+    c.requestRenderAll()
+    commit()
+  }
+
+  function setView(value: number, at?: XY): void {
+    if (!canvas || !size.width) return
+    viewZoom.value = Math.round(clamp(value, 1, MAX_VIEW_ZOOM) * 100) / 100
+    if (at) center = { x: at.x, y: at.y }
+    layout()
+  }
+
   function clearAll(): void {
     const c = canvas
     if (!c || !c.getObjects().length) return
@@ -996,6 +1170,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     deleteSelection,
     clearAll,
     applyStyleToSelection,
+    restyle,
     inspectAt,
     addTextAt,
     setFilled,
@@ -1008,6 +1183,12 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     duplicate,
     nudgeSelection,
     arrange,
+    objects: () => canvas?.getObjects() ?? [],
+    describeObjects,
+    drawShapes,
+    selectObjects,
+    moveObjects,
+    setView,
     settled: () => restoreQueue,
     isEditingText,
     finishInteraction,

@@ -116,6 +116,9 @@ const parts = (group: Group): { line?: Path; label?: FabricText } => ({
   label: group.getObjects().find((o): o is FabricText => o instanceof FabricText)
 })
 
+/** The line of a measuring line (it carries its colour and width). */
+export const measureLine = (group: Group): Path | undefined => parts(group).line
+
 /** Shows the length with another scale (e.g. after calibrating). */
 export function relabel(group: Group, micronsPerPixel: number | null): void {
   const { label } = parts(group)

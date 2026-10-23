@@ -12,6 +12,10 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig.e2e.json,playwright.config.ts}'
 asarUnpack:
   - resources/**
+# `cameradraw.exe --mcp` (MCP over stdio) must start as CameraDraw even when the client's
+# environment carries ELECTRON_RUN_AS_NODE, e.g. from an editor terminal. Nothing runs it as Node.
+electronFuses:
+  runAsNode: false
 win:
   executableName: cameradraw
   # Background service for camera photo buttons (`npm run build:service`), see service/.

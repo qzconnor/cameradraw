@@ -44,6 +44,7 @@ Unter `test-results/<Test>/` liegen ein Screenshot vom Moment des Fehlers und de
 | `fixtures.ts`        | `page`, `app` (Main-Prozess), `workspace` (Ordner), `launch()` für Neustarts  |
 | `helpers/app.ts`     | Galerie, Editor, Zeichnen, Speichern, Toasts, Dialoge, Zugriff auf die Stores |
 | `helpers/library.ts` | Testbilder und Ebenen anlegen (`addImage`) und lesen (`readLayers`)           |
+| `helpers/mcp.ts`     | MCP-Client verbinden (`connect`) und Tools aufrufen (`call`, `callImage`, …)  |
 
 - Bilder mit Ebenen, Aufnahmedatum oder Dateidatum: `addImage(workspace.library, 'Name.png', { layers, mtime })`.
 - In den Zustand der App schauen: `storeValue(page, 'editor', 'dirty')`; eine Aktion auslösen, für die

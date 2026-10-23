@@ -1,8 +1,10 @@
-import { BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { BrowserWindow, clipboard, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { isMcpTransport, isValidMcpPort } from '@shared/mcp'
 import { IPC, type AppSettings, type CameraScale, type SaveImageRequest } from '@shared/types'
 import { registerButtonIpc } from './buttons'
 import { listSystemCameras } from './cameras'
 import { registerControlsIpc } from './controls'
+import { applyMcpSettings, registerMcpIpc } from './mcp/server'
 import { getAppState, getSettings, isWritableDir, updateSettings } from './settings'
 import {
   checkForUpdates,
@@ -84,6 +86,9 @@ function sanitizePatch(patch: unknown): Partial<AppSettings> {
   if (typeof p.ambientLight === 'boolean') out.ambientLight = p.ambientLight
   if (typeof p.preferCameraZoom === 'boolean') out.preferCameraZoom = p.preferCameraZoom
   if (typeof p.stopCameraWhenHidden === 'boolean') out.stopCameraWhenHidden = p.stopCameraWhenHidden
+  if (typeof p.mcpEnabled === 'boolean') out.mcpEnabled = p.mcpEnabled
+  if (isMcpTransport(p.mcpTransport)) out.mcpTransport = p.mcpTransport
+  if (isValidMcpPort(p.mcpPort)) out.mcpPort = p.mcpPort
   if (isStringArray(p.disabledModules)) out.disabledModules = p.disabledModules.slice(0, 100)
   if (isStringRecord(p.cameraModules)) out.cameraModules = p.cameraModules
   if (isScaleRecord(p.cameraScales)) {
@@ -108,6 +113,9 @@ export function registerIpc(): void {
     const before = getSettings().saveDir
     await updateSettings(clean)
     if (getSettings().saveDir !== before) restartLibraryWatcher()
+    if (['mcpEnabled', 'mcpTransport', 'mcpPort'].some((key) => key in clean)) {
+      void applyMcpSettings()
+    }
     return getAppState()
   })
 
@@ -149,6 +157,9 @@ export function registerIpc(): void {
     if (!(png instanceof Uint8Array)) throw new Error('Kein Bild zum Kopieren.')
     return writeImageToClipboard(nativeImage.createFromBuffer(Buffer.from(png)))
   })
+  ipcMain.handle(IPC.clipboardWriteText, (_e, text: unknown) => {
+    if (typeof text === 'string') clipboard.writeText(text)
+  })
   ipcMain.handle(IPC.libraryCreateProject, (_e, name: string) =>
     createProject(requireSaveDir(), name)
   )
@@ -169,4 +180,5 @@ export function registerIpc(): void {
 
   registerButtonIpc()
   registerControlsIpc()
+  registerMcpIpc()
 }

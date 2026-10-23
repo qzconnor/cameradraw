@@ -17,6 +17,7 @@ import { useCameraStore } from '@/stores/camera'
 import { useEditorStore } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
 import { useHardwareStore } from '@/stores/hardware'
+import { useMcpStore } from '@/stores/mcp'
 import { useSettingsStore } from '@/stores/settings'
 import { useUpdatesStore } from '@/stores/updates'
 
@@ -26,6 +27,7 @@ const gallery = useGalleryStore()
 const hardware = useHardwareStore()
 const editor = useEditorStore()
 const updates = useUpdatesStore()
+const mcp = useMcpStore()
 
 const flash = ref<InstanceType<typeof CaptureFlash> | null>(null)
 
@@ -34,6 +36,7 @@ onMounted(async () => {
   void updates.init()
   gallery.init()
   hardware.init()
+  void mcp.init()
   await camera.init()
 })
 </script>

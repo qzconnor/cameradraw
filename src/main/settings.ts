@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { accessSync, constants, existsSync, readFileSync, statSync } from 'fs'
 import { rename, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { DEFAULT_MCP_PORT } from '@shared/mcp'
 import type { AppSettings, AppState } from '@shared/types'
 
 const DEFAULTS: AppSettings = {
@@ -14,7 +15,10 @@ const DEFAULTS: AppSettings = {
   stopCameraWhenHidden: true,
   disabledModules: [],
   cameraModules: {},
-  cameraScales: {}
+  cameraScales: {},
+  mcpEnabled: false,
+  mcpTransport: 'http',
+  mcpPort: DEFAULT_MCP_PORT
 }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')

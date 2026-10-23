@@ -5,6 +5,7 @@ import type {
   SystemCamera,
   UsbDeviceId
 } from './devices'
+import type { McpStatus, RemoteAction } from './mcp'
 import type {
   AppSettings,
   AppState,
@@ -52,6 +53,7 @@ export interface CameraDrawApi {
   clipboard: {
     /** Puts a PNG on the clipboard, e.g. to paste it into a document or a chat. */
     writeImage(png: Uint8Array): Promise<void>
+    writeText(text: string): Promise<void>
   }
   devices: {
     /** Cameras registered with the OS (Windows only, otherwise null). */
@@ -93,5 +95,15 @@ export interface CameraDrawApi {
   windowState: {
     /** The window was minimized (true) or restored (false). */
     onMinimizedChange(callback: (minimized: boolean) => void): () => void
+  }
+  /** Remote control by AI assistants through the MCP server (see `shared/mcp.ts`). */
+  mcp: {
+    status(): Promise<McpStatus>
+    onStatus(callback: (status: McpStatus) => void): () => void
+    /**
+     * Runs the server's requests on the live app; the handler's result (or error) is the answer.
+     * Returns an unsubscribe function.
+     */
+    serve(handler: (action: RemoteAction, args: unknown) => Promise<unknown>): () => void
   }
 }

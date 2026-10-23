@@ -3,6 +3,7 @@ import { IPC } from '@shared/types'
 import type { CameraDrawApi } from '@shared/api'
 import type { UpdateState } from '@shared/types'
 import type { BrightnessEvent, ButtonServiceStatus, StillButtonEvent } from '@shared/devices'
+import type { McpStatus, RemoteRequest, RemoteResponse } from '@shared/mcp'
 
 const api: CameraDrawApi = {
   platform: process.platform,
@@ -31,7 +32,8 @@ const api: CameraDrawApi = {
     }
   },
   clipboard: {
-    writeImage: (png) => ipcRenderer.invoke(IPC.clipboardWriteImage, png)
+    writeImage: (png) => ipcRenderer.invoke(IPC.clipboardWriteImage, png),
+    writeText: (text) => ipcRenderer.invoke(IPC.clipboardWriteText, text)
   },
   devices: {
     systemCameras: () => ipcRenderer.invoke(IPC.systemCameras)
@@ -86,6 +88,26 @@ const api: CameraDrawApi = {
         callback(minimized)
       ipcRenderer.on(IPC.windowMinimized, listener)
       return () => ipcRenderer.removeListener(IPC.windowMinimized, listener)
+    }
+  },
+  mcp: {
+    status: () => ipcRenderer.invoke(IPC.mcpStatus),
+    onStatus: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, status: McpStatus): void => callback(status)
+      ipcRenderer.on(IPC.mcpStatusChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.mcpStatusChanged, listener)
+    },
+    serve: (handler) => {
+      const answer = (response: RemoteResponse): void => ipcRenderer.send(IPC.mcpResponse, response)
+      const listener = (_e: Electron.IpcRendererEvent, { id, action, args }: RemoteRequest): void =>
+        void handler(action, args)
+          .then((result) => answer({ id, result }))
+          // Also when the result cannot be sent (not cloneable).
+          .catch((err: unknown) =>
+            answer({ id, error: err instanceof Error ? err.message : String(err) })
+          )
+      ipcRenderer.on(IPC.mcpRequest, listener)
+      return () => ipcRenderer.removeListener(IPC.mcpRequest, listener)
     }
   }
 }
