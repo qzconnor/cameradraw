@@ -12,9 +12,11 @@ import { isStdioRelay, runStdioRelay } from './mcp/stdio'
 import { startUpdater } from './updater'
 import { loadWindowState, trackWindowState } from './window-state'
 
-// Matches the `--sidebar` token of the dark theme so the native window controls blend in.
-const CHROME_COLOR = '#171717'
-// One pixel less than the 44px title bar, so its bottom border stays visible under the controls.
+// The native window controls stay (Windows 11 shows its snap layouts on the maximize button), but
+// without a background of their own: the title bar – and the glow while an AI assistant is at
+// work – shows through them.
+const OVERLAY_COLOR = '#00000000'
+// One pixel less than the 44px title bar, so their hover highlight leaves its bottom border alone.
 const TITLEBAR_HEIGHT = 43
 
 // The end-to-end tests (e2e/) give every run a throwaway profile, so they never touch the real
@@ -46,7 +48,7 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     ...(process.platform !== 'darwin'
       ? {
-          titleBarOverlay: { color: CHROME_COLOR, symbolColor: '#fafafa', height: TITLEBAR_HEIGHT }
+          titleBarOverlay: { color: OVERLAY_COLOR, symbolColor: '#fafafa', height: TITLEBAR_HEIGHT }
         }
       : {}),
     ...(process.platform !== 'darwin' ? { icon } : {}),
