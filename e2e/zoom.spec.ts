@@ -46,11 +46,13 @@ test('zooming keeps the point under the mouse, panning moves by the dragged dist
   const P = { x: box.x + box.width * 0.55, y: box.y + box.height * 0.45 }
   const atFit = { x: (P.x - box.x) / fit, y: (P.y - box.y) / fit }
 
-  // Wheel at P
+  // Wheel at P. The first step is a big one: while the picture is smaller than the drawing area
+  // in one direction it stays centred there, so only from then on the point keeps its place –
+  // how soon depends on the window (and the layer list beside the picture).
   await page.mouse.move(P.x, P.y)
-  for (let i = 0; i < 5; i++) await page.mouse.wheel(0, -150)
+  await page.mouse.wheel(0, -600)
+  for (let i = 0; i < 2; i++) await page.mouse.wheel(0, -150)
   await expect.poll(() => zoomLabel(page)).toBeGreaterThan(2.5)
-  // The drawing area grows (with the layer list beside it, often only in height).
   const zoomed = await canvasBox(page)
   expect(zoomed.width * zoomed.height).toBeGreaterThan(box.width * box.height)
   await rectAt(page, P)
