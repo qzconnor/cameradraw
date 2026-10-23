@@ -43,6 +43,17 @@ export const MAX_VIEW_ZOOM = 8
 const VIEW_ZOOM_STEP = 0.5
 /** Zoom per wheel delta unit: one mouse wheel notch (100) zooms by about 16 %. */
 const WHEEL_ZOOM = 0.0015
+/** How far a pasted or duplicated copy lands from the original (for a 1920px wide image). */
+const PASTE_OFFSET = 24
+/** Arrow key presses closer together than this are one undo step. */
+const NUDGE_MERGE_MS = 1000
+
+/**
+ * Objects copied with Ctrl+C, as saved – kept while the app runs, so they can be pasted into
+ * another image too. `pastes` moves every further copy a bit more.
+ */
+let shapeClipboard: { objects: Record<string, unknown>[]; pastes: number } | null = null
+const clipboardFilled = ref(false)
 
 /** Selection handle look (rendered on the canvas, therefore plain colors). */
 const CONTROL_STYLE = {
@@ -124,11 +135,28 @@ export interface DrawingCanvas {
   removeObjects(objects: FabricObject[]): void
   /** Selects every object (switches to the select tool). */
   selectAll(): void
+  /** There are copied objects to paste. */
+  canPaste: Ref<boolean>
+  /** Copies `objects` (default: the selection); false if there was nothing to copy. */
+  copyObjects(objects?: FabricObject[]): boolean
+  /** Copies the selection and removes it. */
+  cutSelection(): boolean
+  /** Pastes the copied objects – a bit offset, or centred on `at` – and selects them. */
+  paste(at?: XY): Promise<void>
+  /** Adds a copy of `objects` (default: the selection) next to them, without the clipboard. */
+  duplicate(objects?: FabricObject[]): Promise<void>
+  /** Moves the selection by `dx`/`dy` image pixels (for 1920px); false without a selection. */
+  nudgeSelection(dx: number, dy: number): boolean
+  /** Brings `objects` (default: the selection) in front of all others or behind them. */
+  arrange(where: 'front' | 'back', objects?: FabricObject[]): void
+  /** Resolves once undo, redo and paste steps still being applied are done. */
+  settled(): Promise<void>
   isEditingText(): boolean
   finishInteraction(): void
   exportImage(mime?: string, quality?: number): Promise<Uint8Array>
   exportDocument(): EditorDocument
-  markSaved(): void
+  /** Marks `document` (from `exportDocument` when saving) as the saved state. */
+  markSaved(document: EditorDocument): void
   dispose(): Promise<void>
 }
 
@@ -139,6 +167,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   let zoom = 1
   const history = new CanvasHistory()
   let initialSnapshot = '[]'
+  /** Changes that need loading objects first (undo, redo, paste) – applied one after another. */
   let restoreQueue: Promise<void> = Promise.resolve()
 
   // Interaction state
@@ -162,8 +191,14 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   /** Scale as loaded or last saved – a different one is an unsaved change. */
   let initialScale: number | null = null
 
-  const snapshot = (): string =>
-    JSON.stringify(canvas?.getObjects().map((o) => o.toObject(CUSTOM_PROPS)) ?? [])
+  /**
+   * All objects as saved. The canvas serializes them, not each object itself: in a multi-selection
+   * an object's own position is relative to the selection, the canvas stores where it is in the
+   * image.
+   */
+  const serialized = (): Record<string, unknown>[] =>
+    (canvas?.toObject(CUSTOM_PROPS).objects as Record<string, unknown>[] | undefined) ?? []
+  const snapshot = (): string => JSON.stringify(serialized())
 
   /** Typed into the text being edited – not in the history yet, but already a change. */
   function typedChanges(): boolean {
@@ -743,15 +778,123 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     if (!c || !c.getObjects().length) return
     tool.value = 'select'
     applyTool() // objects become selectable right away, not only after the tool watcher
+    select(c.getObjects())
+    syncState()
+  }
+
+  // ── Copy, paste and arrange ───────────────────────────────────────────────────
+
+  /** `objects` as saved, in their stacking order. */
+  function serializedOf(objects: FabricObject[]): Record<string, unknown>[] {
+    const all = canvas?.getObjects() ?? []
+    const data = serialized()
+    return all.flatMap((o, i) => (objects.includes(o) ? [data[i]] : []))
+  }
+
+  const selection = (): FabricObject[] => canvas?.getActiveObjects() ?? []
+
+  function copyObjects(objects = selection()): boolean {
+    const data = serializedOf(objects)
+    if (!data.length) return false
+    shapeClipboard = { objects: data, pastes: 0 }
+    clipboardFilled.value = true
+    return true
+  }
+
+  function cutSelection(): boolean {
+    const objects = selection()
+    if (!copyObjects(objects)) return false
+    removeObjects(objects)
+    return true
+  }
+
+  function select(objects: FabricObject[]): void {
+    const c = canvas!
     c.discardActiveObject()
-    const objects = c.getObjects()
-    const selection =
+    c.setActiveObject(
       objects.length === 1
         ? objects[0]
         : new ActiveSelection(objects, { canvas: c, ...CONTROL_STYLE })
-    c.setActiveObject(selection)
+    )
     c.requestRenderAll()
+  }
+
+  /**
+   * Adds the objects in `data` and selects them (with the select tool, so they can be moved on
+   * right away). `place` gets their bounding box and returns how far to move them.
+   */
+  function insert(
+    data: Record<string, unknown>[],
+    place: (box: { left: number; top: number; width: number; height: number }) => XY
+  ): Promise<void> {
+    const c = canvas
+    if (!c || !data.length) return Promise.resolve()
+    restoreQueue = restoreQueue.then(async () => {
+      const copies = prepareLoaded(await util.enlivenObjects<FabricObject>(data))
+      if (canvas !== c) return // another image was opened meanwhile
+      const offset = place(util.makeBoundingBoxFromPoints(copies.flatMap((o) => o.getCoords())))
+      for (const obj of copies) {
+        obj.set({ left: obj.left + offset.x, top: obj.top + offset.y })
+        obj.setCoords()
+      }
+      c.add(...copies)
+      tool.value = 'select'
+      applyTool()
+      select(copies)
+      commit()
+    })
+    return restoreQueue
+  }
+
+  function paste(at?: XY): Promise<void> {
+    const copied = shapeClipboard
+    if (!copied) return Promise.resolve()
+    const step = PASTE_OFFSET * unit * ++copied.pastes
+    return insert(copied.objects, (box) =>
+      at
+        ? { x: at.x - box.left - box.width / 2, y: at.y - box.top - box.height / 2 }
+        : { x: step, y: step }
+    )
+  }
+
+  function duplicate(objects = selection()): Promise<void> {
+    const step = PASTE_OFFSET * unit
+    return insert(serializedOf(objects), () => ({ x: step, y: step }))
+  }
+
+  /** The state after the last arrow key press – a quick further press updates it. */
+  let nudged: { state: string; at: number } | null = null
+
+  function nudgeSelection(dx: number, dy: number): boolean {
+    const c = canvas
+    const active = c?.getActiveObject()
+    if (!c || !active || isEditingText()) return false
+    active.set({
+      left: active.left + (active.lockMovementX ? 0 : dx * unit),
+      top: active.top + (active.lockMovementY ? 0 : dy * unit)
+    })
+    active.setCoords()
+    c.requestRenderAll()
+    const state = snapshot()
+    const now = performance.now()
+    if (nudged && history.current === nudged.state && now - nudged.at < NUDGE_MERGE_MS) {
+      history.replace(state)
+    } else history.push(state)
+    nudged = { state, at: now }
     syncState()
+    return true
+  }
+
+  function arrange(where: 'front' | 'back', objects = selection()): void {
+    const c = canvas
+    if (!c) return
+    // In stacking order, so the objects keep their order among themselves.
+    const ordered = c.getObjects().filter((o) => objects.includes(o))
+    if (!ordered.length) return
+    if (where === 'front') for (const obj of ordered) c.bringObjectToFront(obj)
+    else for (const obj of ordered.reverse()) c.sendObjectToBack(obj)
+    c.requestRenderAll()
+    commit()
   }
 
   function clearAll(): void {
@@ -801,10 +944,13 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     }
   }
 
-  /** Marks the current state as saved. */
-  function markSaved(): void {
-    initialSnapshot = snapshot()
-    initialScale = micronsPerPixel.value
+  /**
+   * The state that was saved – not the current one, which may have changed while the file was
+   * being written.
+   */
+  function markSaved(document: EditorDocument): void {
+    initialSnapshot = JSON.stringify(document.objects)
+    initialScale = document.micronsPerPixel ?? null
     syncState()
   }
 
@@ -855,6 +1001,14 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     setFilled,
     removeObjects,
     selectAll,
+    canPaste: clipboardFilled,
+    copyObjects,
+    cutSelection,
+    paste,
+    duplicate,
+    nudgeSelection,
+    arrange,
+    settled: () => restoreQueue,
     isEditingText,
     finishInteraction,
     exportImage,
