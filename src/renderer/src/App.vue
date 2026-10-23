@@ -6,6 +6,8 @@ import DiscardChangesDialog from '@/components/editor/DiscardChangesDialog.vue'
 import ImageEditor from '@/components/editor/ImageEditor.vue'
 import GallerySheet from '@/components/gallery/GallerySheet.vue'
 import TitleBar from '@/components/layout/TitleBar.vue'
+import McpActivityGlow from '@/components/mcp/McpActivityGlow.vue'
+import McpPointer from '@/components/mcp/McpPointer.vue'
 import ModulesSheet from '@/components/modules/ModulesSheet.vue'
 import SettingsSheet from '@/components/settings/SettingsSheet.vue'
 import SetupDialog from '@/components/settings/SetupDialog.vue'
@@ -75,5 +77,8 @@ onMounted(async () => {
     <DiscardChangesDialog />
     <!-- Above the controls at the bottom (mirror, zoom, scale), so a toast never covers them. -->
     <Toaster theme="dark" position="bottom-right" :offset="{ right: 16, bottom: 96 }" />
+    <!-- An AI assistant at work (MCP): over everything, but never in the way. -->
+    <McpActivityGlow />
+    <McpPointer />
   </TooltipProvider>
 </template>

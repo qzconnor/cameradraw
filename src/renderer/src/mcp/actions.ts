@@ -12,6 +12,7 @@ import type { RemoteAction, RemoteActionArgs } from '@shared/mcp'
 import type { GalleryItem } from '@shared/types'
 import type { LayerDescription } from '@/composables/useDrawingCanvas'
 import { MAX_SIDE, perspectiveFor, withTurn } from '@/editor/adjust'
+import { DEFAULT_FONT, findFont, systemFonts } from '@/editor/fonts'
 import { formatScale } from '@/editor/measure'
 import { isBlockingOverlayOpen } from '@/lib/keyboard'
 import { useBurstStore } from '@/stores/burst'
@@ -256,6 +257,18 @@ function createActions(): Actions {
     objects: remote.canvas.describeObjects()
   })
 
+  /** The client's pointer goes to the middle of `objects`, so the user sees where it works. */
+  function pointAt(remote: EditorRemote, objects: FabricObject[]): void {
+    if (!objects.length) return
+    const boxes = objects.map((obj) => obj.getBoundingRect())
+    const left = Math.min(...boxes.map((b) => b.left))
+    const top = Math.min(...boxes.map((b) => b.top))
+    const right = Math.max(...boxes.map((b) => b.left + b.width))
+    const bottom = Math.max(...boxes.map((b) => b.top + b.height))
+    const { x, y } = remote.canvas.sceneToClient({ x: (left + right) / 2, y: (top + bottom) / 2 })
+    useMcpStore().pointTo(x, y)
+  }
+
   /** The objects at `indices` (stacking order); throws for one that does not exist. */
   function objectsAt(remote: EditorRemote, indices: number[]): FabricObject[] {
     const all = remote.canvas.objects()
@@ -317,6 +330,19 @@ function createActions(): Actions {
         'Im Editor gibt es ungespeicherte Änderungen – erst speichern (editor_save) oder mit discard: true verwerfen.'
       )
     }
+  }
+
+  /** A font as it is spelled among the installed ones – a missing one would look different. */
+  async function requireFont(name: string): Promise<string> {
+    const font = await findFont(name)
+    if (!font) throw new Error(`Die Schrift „${name}“ ist nicht installiert – siehe list_fonts.`)
+    return font
+  }
+
+  /** Style values of a client, its font spelled as installed. */
+  async function withFont<T extends { fontFamily?: string }>(style: T): Promise<T> {
+    if (style.fontFamily === undefined) return style
+    return { ...style, fontFamily: await requireFont(style.fontFamily) }
   }
 
   const placeOf = (path: string): string => {
@@ -402,6 +428,16 @@ function createActions(): Actions {
           label: d.label,
           selected: d.id === camera.selectedId
         }))
+      }
+    },
+
+    async listFonts({ query }) {
+      const wanted = query?.trim().toLocaleLowerCase('de')
+      const fonts = [DEFAULT_FONT, ...(await systemFonts())]
+      return {
+        current: editor.fontFamily,
+        default: DEFAULT_FONT,
+        fonts: wanted ? fonts.filter((f) => f.toLocaleLowerCase('de').includes(wanted)) : fonts
       }
     },
 
@@ -577,8 +613,10 @@ function createActions(): Actions {
       const remote = await requireEditing()
       // Into the layer asked for – the assistant's one from then on – or its own.
       const target = layer ? drawingLayerOf(remote, layer) : aiTarget(remote)
+      const specs = await Promise.all(shapes.map(withFont))
       aiLayers.set(remote.baseUrl, target)
-      const added = remote.canvas.drawShapes(shapes, target)
+      const added = remote.canvas.drawShapes(specs, target)
+      pointAt(remote, added)
       const all = remote.canvas.objects()
       return {
         added: added.map((obj) => all.indexOf(obj)),
@@ -664,11 +702,13 @@ function createActions(): Actions {
       return editorDetail(remote)
     },
 
-    async editorUpdate({ indices, moveBy, ...change }) {
+    async editorUpdate({ indices, moveBy, ...values }) {
       const remote = await requireEditing()
       const objects = objectsAt(remote, indices)
+      const change = await withFont(values)
       if (Object.values(change).some((v) => v !== undefined)) remote.canvas.restyle(objects, change)
       if (moveBy) remote.canvas.moveObjects(objects, moveBy.x, moveBy.y)
+      pointAt(remote, objects)
       return editorDetail(remote)
     },
 
@@ -718,11 +758,15 @@ function createActions(): Actions {
       return { [action === 'undo' ? 'undone' : 'redone']: done, ...editorDetail(remote) }
     },
 
-    async editorSetTool({ tool, color, strokeWidth, fontSize, filled }) {
+    async editorSetTool({ tool, color, strokeWidth, fontSize, fontFamily, textAlign, filled }) {
+      // Checked first: a missing font changes nothing.
+      const font = fontFamily === undefined ? undefined : await requireFont(fontFamily)
       if (tool !== undefined) editor.tool = tool
       if (color !== undefined) editor.color = color
       if (strokeWidth !== undefined) editor.strokeWidth = strokeWidth
       if (fontSize !== undefined) editor.fontSize = fontSize
+      if (font !== undefined) editor.fontFamily = font
+      if (textAlign !== undefined) editor.textAlign = textAlign
       if (filled !== undefined) editor.filled = filled
       return { tool: editor.tool, style: editor.style }
     },

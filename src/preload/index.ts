@@ -3,7 +3,7 @@ import { IPC } from '@shared/types'
 import type { CameraDrawApi } from '@shared/api'
 import type { UpdateState } from '@shared/types'
 import type { BrightnessEvent, ButtonServiceStatus, StillButtonEvent } from '@shared/devices'
-import type { McpStatus, RemoteRequest, RemoteResponse } from '@shared/mcp'
+import type { McpPointer, McpStatus, RemoteRequest, RemoteResponse } from '@shared/mcp'
 
 const api: CameraDrawApi = {
   platform: process.platform,
@@ -109,6 +109,12 @@ const api: CameraDrawApi = {
           )
       ipcRenderer.on(IPC.mcpRequest, listener)
       return () => ipcRenderer.removeListener(IPC.mcpRequest, listener)
+    },
+    onPointer: (callback) => {
+      const listener = (_e: Electron.IpcRendererEvent, pointer: McpPointer): void =>
+        callback(pointer)
+      ipcRenderer.on(IPC.mcpPointer, listener)
+      return () => ipcRenderer.removeListener(IPC.mcpPointer, listener)
     }
   }
 }

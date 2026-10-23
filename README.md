@@ -34,7 +34,13 @@ die auch später noch Form für Form bearbeitbar bleiben.
   `~~durchgestrichen~~`, `` `Code` ``, Listen, Aufgaben (`- [ ]` / `- [x]`), Zitate, Tabellen,
   Codeblöcke und Trennlinien. Beim Schreiben steht der Quelltext da, danach der formatierte Text;
   `Strg+B` / `Strg+I` setzen fett und kursiv. Ohne Markdown sieht ein Text aus wie immer – jeder
-  Zeilenumbruch und jede Leerzeile bleibt.
+  Zeilenumbruch und jede Leerzeile bleibt. Was geht, zeigt rechts neben dem Bild eine Legende, die
+  sich einklappen lässt.
+- **Schriften und Ausrichtung** – Jede auf dem Rechner installierte Schrift lässt sich wählen
+  (durchsuchbar, jede in sich selbst gezeigt, die zuletzt benutzten oben). Texte stehen links,
+  zentriert oder rechts: Die Zeilen richten sich danach aus, und ein Text wächst von der Stelle, an
+  die er gesetzt wurde, nach rechts, zu beiden Seiten oder nach links. Schrift und Ausrichtung
+  ändern auch ausgewählte Texte – sie bleiben dabei stehen.
 - **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
   Lineal, siehe unten).
 - **Bild drehen, entzerren, erweitern** – Mit den Knöpfen links neben den Werkzeugen: um 90° drehen,
@@ -80,7 +86,9 @@ die auch später noch Form für Form bearbeitbar bleiben.
   installiert sie mit einem Neustart. Die Versionshinweise aller Versionen stehen im Updates-Panel.
 - **KI-Steuerung (MCP)** – Auf Wunsch bedienen KI-Assistenten wie Claude Code die laufende App über
   einen MCP-Server: Bilder auswählen, Kamerabild anhalten, zeichnen, messen, speichern – live im
-  Fenster zu sehen. Standardmäßig aus.
+  Fenster zu sehen. Solange ein Assistent arbeitet, leuchtet der Fensterrand in seinen Farben, oben
+  steht, wer gerade was tut („Claude Code zeichnet …“), und ein eigener Zeiger mit seinem Namen
+  zeigt, wohin er klickt. Standardmäßig aus.
 
 <table>
   <tr>
@@ -219,6 +227,9 @@ Clients sich verbinden; darunter stehen Status und die Einrichtung pro Client zu
 Texte schreibt ein Assistent in Markdown (`editor_draw` mit `type: "text"`, `editor_update`) – etwa
 einen Befund mit Überschrift, Aufgabenliste und Messwert-Tabelle auf einer mit `editor_extend`
 angefügten Fläche. `editor_state` liefert den Quelltext und die Größe des formatierten Texts.
+`fontFamily` wählt eine installierte Schrift (`list_fonts`), `textAlign` richtet links, zentriert
+oder rechts aus – `at` ist dann die Mitte oder das rechte Ende der Oberkante; beides gibt es auch bei
+`editor_update` und `editor_set_tool`.
 
 Ein Assistent zeichnet in eigene Ebenen (in der Liste mit Roboter-Symbol), nicht in die des
 Benutzers: `editor_draw` ohne `layer` nimmt die zuletzt benutzte eigene, beim ersten Mal eine neue
@@ -228,12 +239,14 @@ sperrt, verschiebt, kopiert, fügt ein und löscht. `editor_insert_image` holt e
 als Bildebene dazu; `editor_rotate`, `editor_perspective` und `editor_reset_image` wirken mit
 `layer` nur auf diese Bildebene.
 
-In den Einstellungen steht, ob der Server läuft, welcher Client zuletzt verbunden war und ob gerade
-ein Assistent etwas tut.
+Solange ein Assistent arbeitet, sieht man es der App an: Der Fensterrand leuchtet (heller, während
+ein Tool läuft), in der Titelleiste steht der Name des Clients und was er gerade tut, und wo er
+klickt, zieht oder zeichnet, erscheint sein Zeiger mit Namen. Ein Klick auf die Anzeige öffnet die
+Einstellungen. Dort steht auch, ob der Server läuft und welcher Client zuletzt verbunden war.
 
 | Bereich   | Tools                                                                                                                                                                                                                                                                                                                                                                                        |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`                                                                                                                                                                                                                                                                                                                                   |
+| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`, `list_fonts`                                                                                                                                                                                                                                                                                                                     |
 | Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                                                                                                                                          |
 | Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                                                                                                                                       |
 | Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_layers`, `editor_insert_image`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_rotate`, `editor_perspective`, `editor_extend`, `editor_reset_image`, `editor_save`, `editor_copy_image`, `editor_close` |
@@ -378,8 +391,8 @@ src/
                      hardware, modules, mcp
     composables/     useDrawingCanvas (fabric.js-Canvas, Ebenen, Werkzeuge, Undo/Redo, Export),
                      useGalleryDrag (Drag & Drop in der Galerie und in den Editor)
-    editor/          Werkzeug-Definitionen, Formen, Markdown-Text (markdown.ts), Ebenen
-                     (layers.ts), Bild-Anpassungen (adjust.ts), History
+    editor/          Werkzeug-Definitionen, Formen, Markdown-Text (markdown.ts), Schriften
+                     (fonts.ts), Ebenen (layers.ts), Bild-Anpassungen (adjust.ts), History
     lib/             gallery.ts (Filtern und Sortieren), Bild- und Kamera-Hilfen
     modules/         Geräte-Module – eine Datei pro Gerätetyp, Liste in index.ts
     mcp/             Aktionen der KI-Steuerung (actions.ts) und was Kamera und Editor dafür

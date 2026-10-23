@@ -1,5 +1,6 @@
 import { nativeImage, type NativeImage } from 'electron'
-import type { RemotePoint } from '@shared/mcp'
+import type { McpPointer, RemotePoint } from '@shared/mcp'
+import { IPC } from '@shared/types'
 import { mainWindow } from './bridge'
 
 /** Pictures for the client as JPEG – much smaller than PNG, and plenty to see what is there. */
@@ -161,6 +162,16 @@ const BUTTON_DOWN: Record<Button, 'leftbuttondown' | 'rightbuttondown' | 'middle
 /** Lets the page handle the events sent so far (pointer handlers often react a frame later). */
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 16))
 
+/** The app's pointer of the client glides this long to where it clicks – so the user can follow. */
+const GLIDE_MS = 220
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** Shows the client's pointer in the app (it does not take part in the input itself). */
+function showPointer(webContents: Electron.WebContents, pointer: McpPointer): void {
+  webContents.send(IPC.mcpPointer, pointer)
+}
+
 export async function click(
   at: RemotePoint,
   button: Button = 'left',
@@ -168,11 +179,15 @@ export async function click(
 ): Promise<void> {
   const { webContents } = visibleWindow()
   const { x, y } = at
+  showPointer(webContents, { x, y, action: 'move' })
+  await wait(GLIDE_MS)
   webContents.sendInputEvent({ type: 'mouseMove', x, y })
   await tick()
   for (let n = 1; n <= clickCount; n++) {
+    showPointer(webContents, { x, y, action: 'down' })
     webContents.sendInputEvent({ type: 'mouseDown', x, y, button, clickCount: n })
     webContents.sendInputEvent({ type: 'mouseUp', x, y, button, clickCount: n })
+    showPointer(webContents, { x, y, action: 'up' })
     await tick()
   }
 }
@@ -186,16 +201,21 @@ export async function drag(
 ): Promise<void> {
   const { webContents } = visibleWindow()
   const held: Electron.MouseInputEvent['modifiers'] = [BUTTON_DOWN[button]]
+  showPointer(webContents, { ...from, action: 'move' })
+  await wait(GLIDE_MS)
   webContents.sendInputEvent({ type: 'mouseMove', x: from.x, y: from.y })
   await tick()
+  showPointer(webContents, { ...from, action: 'down' })
   webContents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button, clickCount: 1 })
   await tick()
   for (let i = 1; i <= steps; i++) {
     const x = Math.round(from.x + ((to.x - from.x) * i) / steps)
     const y = Math.round(from.y + ((to.y - from.y) * i) / steps)
+    showPointer(webContents, { x, y, action: 'move' })
     webContents.sendInputEvent({ type: 'mouseMove', x, y, button, modifiers: held })
     await tick()
   }
   webContents.sendInputEvent({ type: 'mouseUp', x: to.x, y: to.y, button, clickCount: 1 })
+  showPointer(webContents, { ...to, action: 'up' })
   await tick()
 }

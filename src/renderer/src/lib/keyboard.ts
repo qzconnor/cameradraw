@@ -46,3 +46,13 @@ export function isOverlayOpen(): boolean {
 export function isBlockingOverlayOpen(): boolean {
   return [...document.querySelectorAll(OVERLAYS)].some((el) => !el.matches('[data-side-panel]'))
 }
+
+/**
+ * Gives the keyboard back to the text being typed in the editor (fabric's hidden textarea), e.g.
+ * after a pick in the toolbar. False if no text is being typed.
+ */
+export function refocusTypedText(): boolean {
+  const area = document.querySelector<HTMLTextAreaElement>('textarea[data-fabric="textarea"]')
+  area?.focus({ preventScroll: true })
+  return !!area
+}

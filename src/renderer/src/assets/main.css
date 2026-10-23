@@ -225,3 +225,118 @@ html[data-dragging] * {
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * An AI assistant controls the app through the MCP server (components/mcp/McpActivity*.vue): its
+ * own colours – unlike anything else in the app – turning around the window's edge, on its badge
+ * in the title bar and on its pointer.
+ */
+:root {
+  --mcp-colors: #22d3ee, #6366f1, #a855f7, #ec4899, #f97316, #22d3ee;
+}
+
+@property --mcp-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@keyframes mcp-turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes mcp-angle {
+  to {
+    --mcp-angle: 360deg;
+  }
+}
+
+@keyframes mcp-breathe {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 0.8;
+  }
+}
+
+@keyframes mcp-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes mcp-ripple {
+  from {
+    opacity: 0.9;
+    scale: 0.2;
+  }
+  to {
+    opacity: 0;
+    scale: 1;
+  }
+}
+
+@layer components {
+  /* A square of the colours, large enough to cover the window while it turns. Only its rotation is
+     animated – the compositor does that without painting anew. */
+  .mcp-glow-turn {
+    @apply absolute top-1/2 left-1/2 size-[150vmax] -translate-1/2;
+    background: conic-gradient(var(--mcp-colors));
+    animation: mcp-turn 7s linear infinite;
+  }
+  /* The light falls in from every edge and fades towards the middle. */
+  .mcp-glow-haze {
+    @apply absolute inset-0 overflow-hidden mix-blend-screen transition-opacity duration-700;
+    --mcp-reach: 4.5rem;
+    mask:
+      linear-gradient(to right, #000, transparent var(--mcp-reach)),
+      linear-gradient(to left, #000, transparent var(--mcp-reach)),
+      linear-gradient(to bottom, #000, transparent var(--mcp-reach)),
+      linear-gradient(to top, #000, transparent var(--mcp-reach));
+  }
+  /* A thin bright line right along the edge. */
+  .mcp-glow-line {
+    @apply absolute inset-0 overflow-hidden p-0.5;
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+  }
+  /* A border in the colours, turning (the element's own background is the border). */
+  .mcp-ring {
+    background: conic-gradient(from var(--mcp-angle), var(--mcp-colors));
+    animation: mcp-angle 3s linear infinite;
+  }
+  .mcp-fill {
+    background: linear-gradient(135deg, var(--mcp-colors));
+  }
+  /* Text with light running through it, like something being worked on. */
+  .mcp-shimmer {
+    background: linear-gradient(
+        90deg,
+        var(--color-muted-foreground) 0%,
+        var(--color-foreground) 50%,
+        var(--color-muted-foreground) 100%
+      )
+      0 0 / 200% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: mcp-shimmer 1.8s linear infinite;
+  }
+  .mcp-ripple {
+    animation: mcp-ripple 0.6s ease-out forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mcp-glow-turn,
+  .mcp-ring,
+  .mcp-shimmer {
+    animation: none;
+  }
+}

@@ -2,7 +2,14 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
 import type { CaptureInfo, EditorDocument, LayerPicture, LegacyEditorDocument } from '@shared/types'
-import { isShapeTool, type DrawStyle, type ShapeTool, type Tool } from '@/editor/tools'
+import { DEFAULT_FONT } from '@/editor/fonts'
+import {
+  isShapeTool,
+  type DrawStyle,
+  type ShapeTool,
+  type TextAlign,
+  type Tool
+} from '@/editor/tools'
 import { bytesToObjectUrl, canvasToBytes, imageSize } from '@/lib/image'
 import { useCameraStore } from './camera'
 import { useSettingsStore } from './settings'
@@ -59,6 +66,8 @@ export const useEditorStore = defineStore('editor', () => {
   const color = useLocalStorage('cameradraw.color', '#ef4444')
   const strokeWidth = useLocalStorage('cameradraw.strokeWidth', 8)
   const fontSize = useLocalStorage('cameradraw.fontSize', 48)
+  const fontFamily = useLocalStorage('cameradraw.fontFamily', DEFAULT_FONT)
+  const textAlign = useLocalStorage<TextAlign>('cameradraw.textAlign', 'left')
   const filled = useLocalStorage('cameradraw.filled', false)
   /** The shape picked last – the shapes button of the toolbar stands for it. */
   const shapeTool = useLocalStorage<ShapeTool>('cameradraw.shapeTool', 'rect')
@@ -69,6 +78,8 @@ export const useEditorStore = defineStore('editor', () => {
     color: color.value,
     strokeWidth: strokeWidth.value,
     fontSize: fontSize.value,
+    fontFamily: fontFamily.value,
+    textAlign: textAlign.value,
     filled: filled.value
   }))
 
@@ -215,6 +226,8 @@ export const useEditorStore = defineStore('editor', () => {
     color,
     strokeWidth,
     fontSize,
+    fontFamily,
+    textAlign,
     filled,
     shapeTool,
     extendColor,

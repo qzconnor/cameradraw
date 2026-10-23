@@ -92,14 +92,17 @@ function createWindow(): void {
   }
 }
 
-/** Grant camera access, deny everything else. */
+/** Grant camera access and the list of installed fonts (for texts), deny everything else. */
 function setupPermissions(): void {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    if (permission === 'local-fonts') return callback(true)
     if (permission !== 'media') return callback(false)
     const types = 'mediaTypes' in details ? (details.mediaTypes ?? []) : []
     callback(types.every((t) => t === 'video'))
   })
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media')
+  session.defaultSession.setPermissionCheckHandler(
+    (_wc, permission) => permission === 'media' || permission === 'local-fonts'
+  )
 }
 
 function start(): void {

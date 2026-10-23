@@ -9,6 +9,9 @@ import {
   PencilIcon,
   RulerIcon,
   SquareIcon,
+  TextAlignCenterIcon,
+  TextAlignEndIcon,
+  TextAlignStartIcon,
   TypeIcon
 } from '@lucide/vue'
 
@@ -83,9 +86,24 @@ export const COLOR_PRESETS = [
 export const STROKE_PRESETS = [2, 4, 8, 14, 24]
 export const FONT_SIZE_PRESETS = [24, 36, 48, 72, 112]
 
+/** How the lines of a text line up – and where it grows from the point it was placed at. */
+export type TextAlign = 'left' | 'center' | 'right'
+
+export const TEXT_ALIGNS: { id: TextAlign; label: string; icon: Component }[] = [
+  { id: 'left', label: 'Linksbündig', icon: TextAlignStartIcon },
+  { id: 'center', label: 'Zentriert', icon: TextAlignCenterIcon },
+  { id: 'right', label: 'Rechtsbündig', icon: TextAlignEndIcon }
+]
+
+export const isTextAlign = (value: unknown): value is TextAlign =>
+  value === 'left' || value === 'center' || value === 'right'
+
 export interface DrawStyle {
   color: string
   strokeWidth: number
   fontSize: number
+  /** Font of texts: the app's own one or an installed one (see `editor/fonts.ts`). */
+  fontFamily: string
+  textAlign: TextAlign
   filled: boolean
 }

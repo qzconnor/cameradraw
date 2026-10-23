@@ -312,7 +312,8 @@ export const IPC = {
   mcpStatus: 'mcp:status',
   mcpStatusChanged: 'mcp:status-changed',
   mcpRequest: 'mcp:request',
-  mcpResponse: 'mcp:response'
+  mcpResponse: 'mcp:response',
+  mcpPointer: 'mcp:pointer'
 } as const
 
 export const MEDIA_SCHEME = 'cdraw'
