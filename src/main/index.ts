@@ -15,6 +15,11 @@ const CHROME_COLOR = '#171717'
 // One pixel less than the 44px title bar, so its bottom border stays visible under the controls.
 const TITLEBAR_HEIGHT = 43
 
+// The end-to-end tests (e2e/) give every run a throwaway profile, so they never touch the real
+// settings – Electron ignores a redirected %APPDATA%.
+const testUserData = process.env['CAMERADRAW_USER_DATA']
+if (testUserData) app.setPath('userData', testUserData)
+
 registerMediaScheme()
 
 /** Brings a window to the front, also out of the taskbar. */
