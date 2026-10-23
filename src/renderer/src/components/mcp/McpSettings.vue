@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { isValidMcpPort, mcpUrl } from '@shared/mcp'
 import {
@@ -11,10 +12,11 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { errorMessage } from '@/lib/format'
 import { useMcpStore } from '@/stores/mcp'
 import { useSettingsStore } from '@/stores/settings'
-import McpSetupGuide from './McpSetupGuide.vue'
+import McpSetupGuide, { type McpTransport } from './McpSetupGuide.vue'
 import McpStatusItem from './McpStatusItem.vue'
 
 /** Settings of the MCP server (off by default) and how to connect a client to it. */
@@ -45,6 +47,24 @@ function applyPort(): void {
 }
 
 const url = computed(() => mcp.status?.url ?? mcpUrl(settings.mcpPort))
+
+/** HTTP for clients that connect to an address, stdio for those that only start programs. */
+const transport = useLocalStorage<McpTransport>('cameradraw.mcp.transport', 'http')
+
+const TRANSPORT_HINTS: Record<McpTransport, string> = {
+  http: 'Der Client verbindet sich direkt mit CameraDraw – für Claude Code, VS Code, Cursor und die meisten anderen.',
+  stdio:
+    'Der Client startet eine kleine Brücke aus CameraDraw – für Claude Desktop und Clients, die nur Programme starten.'
+}
+
+/** The picked connection stands out clearly – the default muted look is faint on the panel. */
+const PICKED =
+  'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90'
+
+function pickTransport(value: unknown): void {
+  // Clicking the active item would deselect it – one of them is always picked.
+  if (value === 'http' || value === 'stdio') transport.value = value
+}
 </script>
 
 <template>
@@ -88,13 +108,32 @@ const url = computed(() => mcp.status?.url ?? mcpUrl(settings.mcpPort))
       />
     </Field>
 
-    <Field>
+    <Field orientation="horizontal">
+      <FieldContent>
+        <FieldLabel>Verbindung</FieldLabel>
+        <FieldDescription>{{ TRANSPORT_HINTS[transport] }}</FieldDescription>
+      </FieldContent>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        class="self-center"
+        aria-label="Verbindung"
+        :model-value="transport"
+        @update:model-value="pickTransport"
+      >
+        <ToggleGroupItem value="http" :class="PICKED">HTTP</ToggleGroupItem>
+        <ToggleGroupItem value="stdio" :class="PICKED">stdio</ToggleGroupItem>
+      </ToggleGroup>
+    </Field>
+
+    <Field v-if="mcp.status">
       <FieldLabel>Einrichten</FieldLabel>
       <FieldDescription>
         Den Server einmal im KI-Assistenten eintragen – solange CameraDraw läuft und die Steuerung
         an ist, kann er die App bedienen.
       </FieldDescription>
-      <McpSetupGuide :url="url" />
+      <McpSetupGuide :transport="transport" :url="url" :stdio="mcp.status.stdio" />
     </Field>
   </template>
 </template>

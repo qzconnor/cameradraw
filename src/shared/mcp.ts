@@ -17,12 +17,23 @@ export const mcpUrl = (port: number): string => `http://127.0.0.1:${port}${MCP_P
 export const isValidMcpPort = (port: unknown): port is number =>
   typeof port === 'number' && Number.isInteger(port) && port >= 1024 && port <= 65535
 
+/**
+ * How a client that can only start programs (e.g. Claude Desktop) connects: CameraDraw's own
+ * executable runs a small bridge (`resources/mcp-stdio.cjs`) as Node that talks to the server.
+ */
+export interface McpStdioCommand {
+  command: string
+  args: string[]
+  env: Record<string, string>
+}
+
 export interface McpStatus {
   /** `off`: switched off in the settings · `error`: could not start, e.g. the port is taken. */
   state: 'off' | 'starting' | 'running' | 'error'
   port: number
   /** Endpoint for MCP clients. */
   url: string
+  stdio: McpStdioCommand
   error: string | null
   /** The client that connected last (its name from the handshake) and when (ms since epoch). */
   lastClient: { name: string; at: number } | null

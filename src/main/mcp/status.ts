@@ -1,11 +1,23 @@
 import { BrowserWindow } from 'electron'
-import { DEFAULT_MCP_PORT, mcpUrl, type McpStatus } from '@shared/mcp'
+import { DEFAULT_MCP_PORT, mcpUrl, type McpStatus, type McpStdioCommand } from '@shared/mcp'
 import { IPC } from '@shared/types'
+import bridge from '../../../resources/mcp-stdio.cjs?asset'
+
+/** Run by another process – from the unpacked copy next to app.asar (see `asarUnpack`). */
+const BRIDGE = bridge.replace('app.asar', 'app.asar.unpacked')
+
+/** The bridge for clients that only start programs, run by this executable as plain Node. */
+export const stdioCommand = (port: number): McpStdioCommand => ({
+  command: process.execPath,
+  args: [BRIDGE, mcpUrl(port)],
+  env: { ELECTRON_RUN_AS_NODE: '1' }
+})
 
 let status: McpStatus = {
   state: 'off',
   port: DEFAULT_MCP_PORT,
   url: mcpUrl(DEFAULT_MCP_PORT),
+  stdio: stdioCommand(DEFAULT_MCP_PORT),
   error: null,
   lastClient: null,
   activeCalls: 0

@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { refAutoReset, useLocalStorage } from '@vueuse/core'
 import { CheckIcon, CopyIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
-import { MCP_SERVER_NAME } from '@shared/mcp'
+import { MCP_SERVER_NAME, type McpStdioCommand } from '@shared/mcp'
 import { FieldDescription } from '@/components/ui/field'
 import {
   InputGroup,
@@ -15,8 +15,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { errorMessage } from '@/lib/format'
 
-/** How to connect an MCP client – a snippet per client, ready to copy. */
-const props = defineProps<{ url: string }>()
+export type McpTransport = 'http' | 'stdio'
+
+/** How to connect an MCP client – a snippet per client and connection type, ready to copy. */
+const props = defineProps<{
+  transport: McpTransport
+  url: string
+  stdio: McpStdioCommand
+}>()
 
 interface ClientSetup {
   id: string
@@ -28,8 +34,10 @@ interface ClientSetup {
 }
 
 const json = (value: unknown): string => JSON.stringify(value, null, 2)
+/** For a command line – paths may contain spaces. */
+const quote = (value: string): string => (/[\s"]/.test(value) ? `"${value}"` : value)
 
-const clients = computed<ClientSetup[]>(() => [
+const httpClients = computed<ClientSetup[]>(() => [
   {
     id: 'claude-code',
     label: 'Claude Code',
@@ -60,7 +68,63 @@ const clients = computed<ClientSetup[]>(() => [
   }
 ])
 
-const tab = useLocalStorage('cameradraw.mcp.client', 'claude-code')
+const stdioClients = computed<ClientSetup[]>(() => {
+  const { command, args, env } = props.stdio
+  const server = { command, args, env }
+  const envFlags = Object.entries(env).map(([key, value]) => `--env ${key}=${value}`)
+  return [
+    {
+      id: 'claude-desktop',
+      label: 'Claude Desktop',
+      place: 'claude_desktop_config.json',
+      hint: 'In Claude unter Einstellungen → Entwickler → „Konfiguration bearbeiten“ bei „mcpServers“ eintragen und Claude neu starten. CameraDraw muss laufen, wenn Claude startet.',
+      code: json({ mcpServers: { [MCP_SERVER_NAME]: server } })
+    },
+    {
+      id: 'claude-code',
+      label: 'Claude Code',
+      place: 'Terminal',
+      hint: 'Einmal im Terminal ausführen. Mit HTTP geht es bei Claude Code auch ohne Brücke.',
+      code: [
+        'claude mcp add --transport stdio',
+        ...envFlags,
+        MCP_SERVER_NAME,
+        '--',
+        ...[command, ...args].map(quote)
+      ].join(' ')
+    },
+    {
+      id: 'vscode',
+      label: 'VS Code',
+      place: '.vscode/mcp.json',
+      hint: 'In die Datei des Projekts eintragen.',
+      code: json({ servers: { [MCP_SERVER_NAME]: { type: 'stdio', ...server } } })
+    },
+    {
+      id: 'other',
+      label: 'Andere',
+      place: 'JSON',
+      hint: 'Für jeden MCP-Client, der Programme startet, z. B. Cursor (~/.cursor/mcp.json).',
+      code: json({ mcpServers: { [MCP_SERVER_NAME]: server } })
+    }
+  ]
+})
+
+const clients = computed(() =>
+  props.transport === 'stdio' ? stdioClients.value : httpClients.value
+)
+
+const picked = useLocalStorage<Record<McpTransport, string>>('cameradraw.mcp.clients', {
+  http: 'claude-code',
+  stdio: 'claude-desktop'
+})
+/** The client shown – remembered per connection type. */
+const tab = computed({
+  get: () =>
+    clients.value.find((c) => c.id === picked.value[props.transport])?.id ?? clients.value[0].id,
+  set: (id: string) => (picked.value = { ...picked.value, [props.transport]: id })
+})
+
 /** The snippet copied last – its button shows a check mark for a moment. */
 const copied = refAutoReset<string | null>(null, 1500)
 
@@ -94,10 +158,10 @@ async function copy(client: ClientSetup): Promise<void> {
           readonly
           spellcheck="false"
           :aria-label="`Konfiguration für ${client.label}`"
-          class="min-h-0 font-mono text-xs md:text-xs"
+          class="min-h-0 font-mono text-xs break-all md:text-xs"
         />
         <InputGroupAddon align="block-end" class="border-t">
-          <InputGroupText>{{ client.place }}</InputGroupText>
+          <InputGroupText class="min-w-0 truncate">{{ client.place }}</InputGroupText>
           <InputGroupButton class="ml-auto" @click="copy(client)">
             <CheckIcon v-if="copied === client.id" data-icon="inline-start" />
             <CopyIcon v-else data-icon="inline-start" />

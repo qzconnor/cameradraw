@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from 'fs'
 import { request } from 'http'
 import { createServer } from 'net'
 import { join } from 'path'
+import { Client } from '@modelcontextprotocol/client'
+import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/client/stdio'
 import { expect, test } from './fixtures'
 import { canvasBox, storeValue, toast, waitForEditor, waitForLiveCamera } from './helpers/app'
 import { addImage, readLayers } from './helpers/library'
@@ -209,6 +211,45 @@ test.describe('switched on', () => {
     await callText(client, 'press_key', { keys: 'Escape' })
     await expect.poll(() => editorOpen(page)).toBe(false)
     await client.close()
+  })
+
+  test('a client that only starts programs connects through the stdio bridge', async ({ page }) => {
+    await waitForMcp(page)
+    // The entry for Claude Desktop, as the settings show it.
+    await page.getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    await page.getByText('stdio', { exact: true }).click()
+    await expect(page.getByRole('tab', { name: 'Claude Desktop' })).toHaveAttribute(
+      'data-state',
+      'active'
+    )
+    const entry = JSON.parse(
+      await page.getByRole('textbox', { name: 'Konfiguration für Claude Desktop' }).inputValue()
+    )
+    const server = entry.mcpServers.cameradraw
+    expect(server.env).toEqual({ ELECTRON_RUN_AS_NODE: '1' })
+    expect(server.args).toEqual([expect.stringMatching(/mcp-stdio\.cjs$/), mcpUrl()])
+
+    // Started like Claude Desktop does: the app's executable runs the bridge as Node.
+    const bridge = (args: string[]): StdioClientTransport =>
+      new StdioClientTransport({
+        command: server.command,
+        args,
+        env: { ...getDefaultEnvironment(), ...server.env },
+        stderr: 'ignore'
+      })
+    const client = new Client({ name: 'stdio-client', version: '1.0.0' })
+    await client.connect(bridge(server.args))
+    expect((await client.listTools()).tools.length).toBeGreaterThan(30)
+    expect(await call(client, 'get_state')).toMatchObject({ view: 'camera' })
+    await expect(page.getByText(/Zuletzt verbunden: stdio-client/)).toBeVisible()
+    await client.close()
+
+    // Without the app on the other end it says what is missing.
+    const lost = new Client({ name: 'stdio-client', version: '1.0.0' })
+    await expect(lost.connect(bridge([server.args[0], mcpUrl(1)]))).rejects.toThrow(
+      /CameraDraw ist nicht erreichbar/
+    )
+    await lost.close()
   })
 
   test('web pages cannot use the server', async ({ page }) => {

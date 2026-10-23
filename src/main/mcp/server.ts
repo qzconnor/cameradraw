@@ -10,7 +10,7 @@ import { MCP_PATH, mcpUrl } from '@shared/mcp'
 import { IPC } from '@shared/types'
 import { getSettings } from '../settings'
 import { registerBridgeIpc } from './bridge'
-import { getMcpStatus, noteClient, setMcpStatus } from './status'
+import { getMcpStatus, noteClient, setMcpStatus, stdioCommand } from './status'
 import { createMcpServer } from './tools'
 
 /**
@@ -87,7 +87,7 @@ async function apply(): Promise<void> {
   const current = getMcpStatus()
   if (mcpEnabled && server && current.state === 'running' && current.port === mcpPort) return
   await close()
-  const base = { port: mcpPort, url: mcpUrl(mcpPort), error: null }
+  const base = { port: mcpPort, url: mcpUrl(mcpPort), stdio: stdioCommand(mcpPort), error: null }
   if (!mcpEnabled) {
     setMcpStatus({ ...base, state: 'off' })
     return

@@ -153,12 +153,21 @@ KI-Assistent die laufende App bedienen – alles passiert sichtbar im Fenster, s
 klicken: Kamera wählen und pausieren, Bild anhalten oder direkt speichern, Bilder in der Galerie
 suchen, öffnen, umbenennen und verschieben, im Editor zeichnen, messen, ändern und speichern.
 
-**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Darunter stehen Status, Port und die
-Einrichtung für Claude Code, VS Code, Cursor und andere Clients zum Kopieren. Für Claude Code:
+**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Darunter stehen Status, Port und
+unter **Verbindung** die Einrichtung zum Kopieren:
 
-```bash
-claude mcp add --transport http cameradraw http://127.0.0.1:3729/mcp
-```
+- **HTTP** – der Client verbindet sich direkt mit der Adresse: Claude Code, VS Code, Cursor und die
+  meisten anderen. Für Claude Code:
+
+  ```bash
+  claude mcp add --transport http cameradraw http://127.0.0.1:3729/mcp
+  ```
+
+- **stdio** – für Clients, die nur Programme starten, vor allem **Claude Desktop**
+  (`claude_desktop_config.json` kennt keine Adressen). Der Client startet dann eine kleine Brücke
+  (`resources/mcp-stdio.cjs`), die die CameraDraw-Programmdatei selbst als Node ausführt
+  (`ELECTRON_RUN_AS_NODE=1`) – es muss nichts installiert werden. Der Eintrag in der App enthält die
+  Pfade dieser Installation; CameraDraw muss laufen, wenn der Client startet.
 
 Solange der Server an ist, zeigt die Titelleiste ein Roboter-Symbol; ein grüner Punkt daran heißt,
 dass ein Assistent gerade etwas tut.
