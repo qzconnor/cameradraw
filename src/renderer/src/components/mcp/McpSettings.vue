@@ -57,9 +57,9 @@ const TRANSPORT_HINTS: Record<McpTransport, string> = {
     'Der Client startet eine kleine Brücke aus CameraDraw – für Claude Desktop und Clients, die nur Programme starten.'
 }
 
-/** The picked connection stands out clearly – the default muted look is faint on the panel. */
-const PICKED =
-  'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90'
+/** Segments look like the client tabs below: a rounded pill, the picked one raised. */
+const SEGMENT =
+  'h-6.5 border border-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:border-input data-[state=on]:bg-input/30 data-[state=on]:text-foreground data-[state=on]:shadow-sm'
 
 function pickTransport(value: unknown): void {
   // Clicking the active item would deselect it – one of them is always picked.
@@ -115,15 +115,15 @@ function pickTransport(value: unknown): void {
       </FieldContent>
       <ToggleGroup
         type="single"
-        variant="outline"
         size="sm"
-        class="self-center"
+        :spacing="0.5"
+        class="self-center bg-muted p-0.75"
         aria-label="Verbindung"
         :model-value="transport"
         @update:model-value="pickTransport"
       >
-        <ToggleGroupItem value="http" :class="PICKED">HTTP</ToggleGroupItem>
-        <ToggleGroupItem value="stdio" :class="PICKED">stdio</ToggleGroupItem>
+        <ToggleGroupItem value="http" :class="SEGMENT">HTTP</ToggleGroupItem>
+        <ToggleGroupItem value="stdio" :class="SEGMENT">stdio</ToggleGroupItem>
       </ToggleGroup>
     </Field>
 
