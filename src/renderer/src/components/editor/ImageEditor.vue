@@ -24,11 +24,11 @@ import CropActionBar from './CropActionBar.vue'
 import EditorActionBar from './EditorActionBar.vue'
 import EditorBreadcrumb from './EditorBreadcrumb.vue'
 import EditorCanvasMenu from './EditorCanvasMenu.vue'
-import EditorImageMenu from './EditorImageMenu.vue'
+import EditorImageTools from './EditorImageTools.vue'
 import EditorScaleBadge from './EditorScaleBadge.vue'
 import EditorToolbar from './EditorToolbar.vue'
 import EditorZoomControl from './EditorZoomControl.vue'
-import ExtendCanvasDialog from './ExtendCanvasDialog.vue'
+import ExtendCanvasOverlay from './ExtendCanvasOverlay.vue'
 import PerspectiveCropOverlay from './PerspectiveCropOverlay.vue'
 import SaveImageDialog from './SaveImageDialog.vue'
 import TextFormatHint from './TextFormatHint.vue'
@@ -329,7 +329,8 @@ async function copyToClipboard(): Promise<void> {
 
 /** Corners of a perspective crop being placed (image pixels), null otherwise. */
 const cropCorners = ref<ImagePoint[] | null>(null)
-const extendOpen = ref(false)
+/** Handles on the picture's edges for adding space, with a form for the amount. */
+const extendOverlay = ref<InstanceType<typeof ExtendCanvasOverlay> | null>(null)
 /** Where the corners start: a bit inside the picture, so all four can be grabbed. */
 const CROP_INSET = 0.1
 
@@ -486,13 +487,15 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       <!-- Breadcrumb on the left gets all the space the right-aligned toolbar leaves. -->
       <div class="flex shrink-0 items-center gap-3 px-4 pt-4 pb-3">
         <EditorBreadcrumb :path="session.path" />
-        <EditorImageMenu
+        <EditorImageTools
           class="shrink-0"
           :adjusted="adjustmentCount > 0"
-          :disabled="!ready || !!cropCorners"
+          :cropping="!!cropCorners"
+          :disabled="!ready"
           @rotate="(turns) => changePicture({ type: 'rotate', turns })"
           @crop="startCrop"
-          @extend="extendOpen = true"
+          @stop-crop="stopCropping"
+          @extend="extendOverlay?.openForm('right')"
           @reset="resetPicture"
         />
         <!-- Out of the way while crop corners are placed. -->
@@ -525,6 +528,13 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             @contextmenu.capture="onContextMenu"
           />
         </EditorCanvasMenu>
+        <ExtendCanvasOverlay
+          v-if="ready && !cropCorners"
+          ref="extendOverlay"
+          :canvas="canvas"
+          :area="host"
+          @extend="changePicture"
+        />
         <PerspectiveCropOverlay
           v-if="cropCorners"
           v-model:corners="cropCorners"
@@ -590,8 +600,6 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
       :camera-label="cameraLabel"
       @confirm="calibrate"
     />
-
-    <ExtendCanvasDialog v-model:open="extendOpen" :image-size="imageSize" @extend="changePicture" />
 
     <SaveImageDialog
       v-model:open="saveOpen"

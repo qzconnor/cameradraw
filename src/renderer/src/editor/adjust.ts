@@ -34,6 +34,34 @@ export function sizeAfter(size: Size, adjustment: ImageAdjustment): Size {
 export const sizeAfterAll = (size: Size, adjustments: ImageAdjustment[]): Size =>
   adjustments.reduce(sizeAfter, size)
 
+// ── Adding space ──────────────────────────────────────────────────────────────
+
+export type Side = 'top' | 'right' | 'bottom' | 'left'
+
+export const isHorizontal = (side: Side): boolean => side === 'left' || side === 'right'
+
+/** Length of the picture across `side`: its width for left and right, its height otherwise. */
+export const acrossOf = (size: Size, side: Side): number =>
+  isHorizontal(side) ? size.width : size.height
+
+/** The most space that fits on `side` – the picture may be at most `MAX_SIDE` wide and high. */
+export const maxExtend = (size: Size, side: Side): number => MAX_SIDE - acrossOf(size, side)
+
+/** Space of `pixels` and `color` on one side of the picture. */
+export const extendAt = (
+  side: Side,
+  pixels: number,
+  color: string
+): Extract<ImageAdjustment, { type: 'extend' }> => ({
+  type: 'extend',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  [side]: pixels,
+  color
+})
+
 /** How far drawn objects turn with an adjustment (degrees, clockwise). */
 export const turnOf = (adjustment: ImageAdjustment): number =>
   adjustment.type === 'rotate' ? adjustment.turns * 90 : 0
