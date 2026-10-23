@@ -58,6 +58,14 @@ const {
   setFilled,
   removeObjects,
   selectAll,
+  canPaste,
+  copyObjects,
+  cutSelection,
+  paste,
+  duplicate,
+  nudgeSelection,
+  arrange,
+  settled,
   isEditingText,
   finishInteraction,
   exportImage,
@@ -124,6 +132,27 @@ function toggleFill(): void {
 function deleteSpot(): void {
   if (spot.value) removeObjects(spot.value.objects)
 }
+
+function pasteHere(): void {
+  void paste(spot.value?.onImage ? spot.value.point : undefined)
+}
+
+/** Ctrl+C without a selection: there is nothing to copy – say how to copy the whole picture. */
+function copyShapes(): void {
+  if (copyObjects()) return
+  toast('Nichts ausgewählt', {
+    description: 'Wähle Formen aus, um sie zu kopieren – Strg+Shift+C kopiert das ganze Bild.'
+  })
+}
+
+/** Arrow keys move the selection, with Shift in bigger steps. */
+const NUDGE: Record<string, [number, number]> = {
+  arrowleft: [-1, 0],
+  arrowright: [1, 0],
+  arrowup: [0, -1],
+  arrowdown: [0, 1]
+}
+const NUDGE_SHIFT_FACTOR = 10
 
 // ── Measuring ─────────────────────────────────────────────────────────────────
 
@@ -202,18 +231,22 @@ async function save(
   if (saving.value) return
   saving.value = true
   try {
+    // An undo or paste pressed just before is part of the saved image.
+    await settled()
     const { mime, quality } = encodingFor(target)
-    const image = await exportImage(mime, quality)
+    // Picture and layers of the same moment (rendering starts right away, encoding takes longer).
+    const encoding = exportImage(mime, quality)
+    const document = exportDocument()
     const item = await gallery.save({
       // A copy is a new image – the original stays as it is.
       source: copy ? null : props.session.path,
       target,
-      image,
+      image: await encoding,
       base: props.session.baseBytes,
-      document: { ...exportDocument(), capture: props.session.capture },
+      document: { ...document, capture: props.session.capture },
       capturedAt: props.session.capturedAt
     })
-    markSaved()
+    markSaved(document)
     saveOpen.value = false
     if (stayOpen) {
       toast.success('Gespeichert', { description: placeOf(item) })
@@ -278,8 +311,27 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   } else if (mod && key === 'a') {
     e.preventDefault()
     selectAll()
+  } else if (mod && key === 'c') {
+    e.preventDefault()
+    copyShapes()
+  } else if (mod && key === 'x') {
+    e.preventDefault()
+    cutSelection()
+  } else if (mod && key === 'v') {
+    e.preventDefault()
+    void paste()
+  } else if (mod && key === 'd') {
+    e.preventDefault()
+    void duplicate()
   } else if (mod || e.altKey) {
     return
+  } else if (key in NUDGE) {
+    const [dx, dy] = NUDGE[key]
+    const factor = e.shiftKey ? NUDGE_SHIFT_FACTOR : 1
+    if (nudgeSelection(dx * factor, dy * factor)) e.preventDefault()
+  } else if (key === 'home' || key === 'end') {
+    e.preventDefault()
+    arrange(key === 'home' ? 'front' : 'back')
   } else if (key === 'delete' || key === 'backspace') {
     e.preventDefault()
     deleteSelection()
@@ -316,11 +368,16 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
         <EditorCanvasMenu
           :spot="spot"
           :can-select-all="!isEmpty"
+          :can-paste="canPaste"
           @add-text="addTextHere"
           @toggle-fill="toggleFill"
           @calibrate="calibrateSpot"
           @delete="deleteSpot"
           @select-all="selectAll"
+          @copy="spot && copyObjects(spot.objects)"
+          @duplicate="spot && duplicate(spot.objects)"
+          @paste="pasteHere"
+          @arrange="(where) => spot && arrange(where, spot.objects)"
         >
           <!-- capture: runs before the menu opens, so it knows what was right-clicked. -->
           <div

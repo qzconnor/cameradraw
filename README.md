@@ -31,7 +31,10 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Messen** – Strecken im Bild messen, in µm/mm, sobald ein Maßstab festgelegt ist (z. B. mit einem
   Lineal, siehe unten).
 - **Kontextmenü im Editor** – Text genau an der angeklickten Stelle einfügen, Formen nachträglich
-  füllen, löschen, alles auswählen.
+  füllen, kopieren, duplizieren, nach vorne oder hinten legen, löschen, alles auswählen.
+- **Formen kopieren** – `Strg+C` / `Strg+V` / `Strg+D`, auch von einem Bild ins nächste (Messlinien
+  zeigen dort die Länge im Maßstab des neuen Bildes). Die Pfeiltasten schieben die Auswahl
+  pixelgenau.
 - **Bleibt bearbeitbar** – Neben jedem Bild liegen das Original und die Zeichnung als Ebenen. Wer
   ein Bild wieder öffnet, kann jede Form und jeden Text einzeln verschieben, ändern oder löschen.
 - **Projekte** – Beim Speichern fragt CameraDraw nach Dateiname und Projekt (oder „Kein Projekt“).
@@ -101,8 +104,12 @@ später in den Einstellungen ändern.
 | `V` `P` `M` `E`      | Auswählen, Stift, Textmarker, Radierer                                 |
 | `L` `A` `R` `O` `T`  | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
 | `D`                  | Messen – Strecke mit Längenangabe (`Shift` = gerade)                   |
-| Rechtsklick          | Text hier einfügen, Form füllen / Füllung entfernen, Löschen           |
+| Rechtsklick          | Text / Kopiertes hier einfügen, Kopieren, Duplizieren, Füllen, Löschen |
 | `Strg+A`             | Alles auswählen (beim Schreiben: den Text markieren)                   |
+| `Strg+C` / `Strg+X`  | Auswahl kopieren / ausschneiden                                        |
+| `Strg+V` / `Strg+D`  | Einfügen (etwas versetzt, auch in ein anderes Bild) / Duplizieren      |
+| Pfeiltasten          | Auswahl um 1 Pixel verschieben (`Shift` = 10 Pixel)                    |
+| `Pos1` / `Ende`      | Auswahl in den Vordergrund / Hintergrund                               |
 | `Strg+Z` / `Strg+Y`  | Rückgängig / Wiederholen                                               |
 | `Entf`               | Auswahl löschen                                                        |
 | `Strg+S`             | Speichern – neue Bilder mit Dateiname und Projekt, gespeicherte direkt |

@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { BoxSelectIcon, PaintBucketIcon, RulerIcon, Trash2Icon, TypeIcon } from '@lucide/vue'
+import {
+  BoxSelectIcon,
+  BringToFrontIcon,
+  ClipboardPasteIcon,
+  CopyIcon,
+  CopyPlusIcon,
+  PaintBucketIcon,
+  RulerIcon,
+  SendToBackIcon,
+  Trash2Icon,
+  TypeIcon
+} from '@lucide/vue'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,6 +31,8 @@ const props = defineProps<{
   spot: CanvasSpot | null
   /** There are objects to select. */
   canSelectAll: boolean
+  /** Objects were copied and can be pasted. */
+  canPaste: boolean
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +42,11 @@ const emit = defineEmits<{
   calibrate: []
   delete: []
   selectAll: []
+  copy: []
+  duplicate: []
+  /** Paste the copied objects at the clicked point. */
+  paste: []
+  arrange: [where: 'front' | 'back']
 }>()
 
 const hasObjects = computed(() => !!props.spot?.objects.length)
@@ -48,9 +66,27 @@ const several = computed(() => (props.spot?.objects.length ?? 0) > 1)
           <TypeIcon />
           Text hier einfügen
         </ContextMenuItem>
+        <ContextMenuItem v-if="canPaste" :disabled="!spot?.onImage" @select="emit('paste')">
+          <ClipboardPasteIcon />
+          Hier einfügen
+          <ContextMenuShortcut>Strg V</ContextMenuShortcut>
+        </ContextMenuItem>
       </ContextMenuGroup>
 
       <template v-if="hasObjects">
+        <ContextMenuSeparator />
+        <ContextMenuGroup>
+          <ContextMenuItem @select="emit('copy')">
+            <CopyIcon />
+            Kopieren
+            <ContextMenuShortcut>Strg C</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem @select="emit('duplicate')">
+            <CopyPlusIcon />
+            Duplizieren
+            <ContextMenuShortcut>Strg D</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuGroup>
           <ContextMenuItem v-if="spot?.fillable" @select="emit('toggleFill')">
@@ -60,6 +96,16 @@ const several = computed(() => (props.spot?.objects.length ?? 0) > 1)
           <ContextMenuItem v-if="spot?.measurement" @select="emit('calibrate')">
             <RulerIcon />
             Als Maßstab verwenden …
+          </ContextMenuItem>
+          <ContextMenuItem @select="emit('arrange', 'front')">
+            <BringToFrontIcon />
+            In den Vordergrund
+            <ContextMenuShortcut>Pos1</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem @select="emit('arrange', 'back')">
+            <SendToBackIcon />
+            In den Hintergrund
+            <ContextMenuShortcut>Ende</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem variant="destructive" @select="emit('delete')">
             <Trash2Icon />
