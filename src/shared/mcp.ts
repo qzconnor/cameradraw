@@ -90,6 +90,7 @@ export type RemoteTool =
   | 'rect'
   | 'ellipse'
   | 'text'
+  | 'marker'
   | 'eraser'
   | 'measure'
 
@@ -114,6 +115,7 @@ export type RemoteShape = RemoteStyle &
       }
     | { type: 'pen' | 'highlighter'; points: RemotePoint[] }
     | { type: 'text'; at: RemotePoint; text: string }
+    | { type: 'marker'; at: RemotePoint; tip?: RemotePoint; label?: string }
   )
 
 export type RemotePanel = 'gallery' | 'settings' | 'modules' | 'updates' | 'none'
@@ -151,7 +153,20 @@ export interface RemoteActionArgs {
     resetControls?: boolean
   }
   capture: { mode?: 'edit' | 'save' }
+  focusStack: {
+    action: 'sweep' | 'start' | 'finish' | 'cancel'
+    frames?: number
+    mode?: 'edit' | 'save'
+  }
   setBurst: { enabled?: boolean; project?: string | null }
+  setFocusPeaking: { enabled?: boolean; level?: 'low' | 'medium' | 'high'; color?: string }
+  setReference: {
+    path?: string | null
+    latest?: boolean
+    opacity?: number
+    mode?: 'blend' | 'difference'
+    drawing?: boolean
+  }
   showPanel: {
     panel: RemotePanel
     project?: string | null

@@ -3,7 +3,7 @@ import type { ShapeTool } from './tools'
 
 /** Marker stored on every drawn object so style changes know how to apply. */
 export type ObjectKind =
-  'pen' | 'highlighter' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'measure'
+  'pen' | 'highlighter' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'text' | 'measure' | 'marker'
 
 /** Custom properties that must survive serialization (`cdLength`: see `editor/measure.ts`). */
 export const CUSTOM_PROPS = ['cdKind', 'cdLength']

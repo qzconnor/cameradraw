@@ -16,6 +16,28 @@ export interface CapturedFrame {
   frameWidth: number
 }
 
+export interface FrameRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * The part of a camera frame the view shows, in frame pixels: the picture inside it (black bars
+ * baked in around it – centred – cut off), and with digital zoom only its centre.
+ */
+export function visibleRegion(
+  frame: { width: number; height: number },
+  picture?: { width: number; height: number } | null,
+  digitalZoom = 1
+): FrameRegion {
+  const zoom = Math.max(1, digitalZoom)
+  const width = Math.min(frame.width, picture?.width ?? frame.width) / zoom
+  const height = Math.min(frame.height, picture?.height ?? frame.height) / zoom
+  return { x: (frame.width - width) / 2, y: (frame.height - height) / 2, width, height }
+}
+
 /**
  * Grabs the current video frame in full camera resolution – right away, so a picture shows the
  * moment of the key press even if encoding and saving it take a while.
@@ -35,10 +57,7 @@ export function captureFrame(
   if (!videoWidth || !videoHeight) throw new Error('Kein Kamerabild verfügbar')
   const width = Math.min(videoWidth, picture?.width ?? videoWidth)
   const height = Math.min(videoHeight, picture?.height ?? videoHeight)
-
-  const zoom = Math.max(1, digitalZoom)
-  const cropWidth = width / zoom
-  const cropHeight = height / zoom
+  const crop = visibleRegion({ width: videoWidth, height: videoHeight }, picture, digitalZoom)
 
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -50,16 +69,6 @@ export function captureFrame(
     ctx.translate(width, 0)
     ctx.scale(-1, 1)
   }
-  ctx.drawImage(
-    video,
-    (videoWidth - cropWidth) / 2,
-    (videoHeight - cropHeight) / 2,
-    cropWidth,
-    cropHeight,
-    0,
-    0,
-    width,
-    height
-  )
+  ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height)
   return { canvas, width, height, frameWidth: videoWidth }
 }

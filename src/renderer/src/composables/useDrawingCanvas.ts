@@ -66,6 +66,18 @@ import {
   relabel,
   restyleMeasure
 } from '@/editor/measure'
+import {
+  createMarker,
+  isMarker,
+  lockMarker,
+  markerColor,
+  markerGeometry,
+  markerLabel,
+  markerRadius,
+  markerSize,
+  nextMarkerLabel,
+  restyleMarker
+} from '@/editor/marker'
 import { CUSTOM_PROPS, createShape, kindOf, snapAngle, tag, type ObjectKind } from '@/editor/shapes'
 import {
   isShapeTool,
@@ -159,6 +171,8 @@ export type ShapeSpec = Partial<DrawStyle> &
     | { type: ShapeTool | 'measure'; from: XY; to: XY }
     | { type: 'pen' | 'highlighter'; points: XY[] }
     | { type: 'text'; at: XY; text: string }
+    /** `at`: middle of the circle; `tip`: the spot a line leads to; `label`: default the next number. */
+    | { type: 'marker'; at: XY; tip?: XY | null; label?: string }
   )
 
 /** A drawn object as described to the remote control. */
@@ -174,8 +188,11 @@ export interface DrawnObject {
   /** Line width as in the toolbar. */
   strokeWidth?: number
   filled?: boolean
+  /** Texts: their Markdown source; markers: their label. */
   text?: string
   fontSize?: number
+  /** Markers: the spot their line leads to (image pixels), null without one. */
+  tip?: { x: number; y: number } | null
   /** Texts: the font they ask for (it may be missing on this computer) and how lines line up. */
   fontFamily?: string
   textAlign?: TextAlign
@@ -282,6 +299,8 @@ export interface DrawingCanvas {
   hasSelection: Ref<boolean>
   /** Only texts are selected – their font, alignment and size can be changed. */
   textSelected: Ref<boolean>
+  /** Only numbered markers are selected – their size can be changed. */
+  markerSelected: Ref<boolean>
   isEmpty: Ref<boolean>
   /** True if the drawing differs from the last loaded/saved state (incl. text being typed). */
   dirty: Ref<boolean>
@@ -539,6 +558,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   const canRedo = ref(false)
   const hasSelection = ref(false)
   const textSelected = ref(false)
+  const markerSelected = ref(false)
   const isEmpty = ref(true)
   const dirty = ref(false)
   const editingText = ref(false)
@@ -878,6 +898,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     const selected = canvas?.getActiveObjects() ?? []
     hasSelection.value = selected.length > 0
     textSelected.value = hasSelection.value && selected.every((obj) => obj instanceof IText)
+    markerSelected.value = hasSelection.value && selected.every(isMarker)
   }
 
   const isFillable = (obj: FabricObject): boolean => {
@@ -1160,7 +1181,10 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     c.requestRenderAll()
   }
 
-  /** Changes style or text of `objects`; measuring lines only take colour and line width. */
+  /**
+   * Changes style or text of `objects`; measuring lines only take colour and line width, markers
+   * colour, size and their label (as text).
+   */
   function restyle(objects: FabricObject[], change: ObjectChange): void {
     const c = canvas
     const drawn = objects.filter(isDrawn)
@@ -1169,6 +1193,15 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
     for (const obj of drawn) {
       const kind = kindOf(obj)
+      if (isMarker(obj)) {
+        restyleMarker(obj, {
+          color,
+          fontSize: fontSize === undefined ? undefined : fontSize * unit,
+          label: text
+        })
+        obj.setCoords()
+        continue
+      }
       if (isMeasure(obj)) {
         restyleMeasure(obj, {
           color,
@@ -1259,6 +1292,17 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     c.requestRenderAll()
   }
 
+  /** A marker with the next number at `at`, with a line to `tip` if given. */
+  function markerAt(at: XY, tip: XY | null): FabricObject {
+    const { color, fontSize } = style.value
+    return createMarker(
+      at,
+      nextMarkerLabel(drawnObjects()),
+      { color, fontSize: fontSize * unit },
+      tip
+    )
+  }
+
   function eraseAt(e: TPointerEvent): void {
     const c = canvas!
     const target = c.findTarget(e).target
@@ -1277,7 +1321,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   function onMouseDown(opt: TPointerEventInfo): void {
     if (locked || view) return
     const t = tool.value
-    if (isShapeTool(t) || t === 'measure') {
+    if (isShapeTool(t) || t === 'measure' || t === 'marker') {
       draft = { from: opt.scenePoint, object: null }
     } else if (t === 'text') {
       // A click while typing only finishes the text – it must not spawn a new one.
@@ -1293,23 +1337,31 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   function onMouseMove(opt: TPointerEventInfo): void {
     const c = canvas!
     const t = tool.value
-    if (draft && (isShapeTool(t) || t === 'measure')) {
+    if (draft && (isShapeTool(t) || t === 'measure' || t === 'marker')) {
       if (draft.object) c.remove(draft.object)
+      const to = opt.e.shiftKey ? snapAngle(draft.from, opt.scenePoint) : opt.scenePoint
       draft.object =
         t === 'measure'
           ? createMeasure(
               draft.from,
-              opt.e.shiftKey ? snapAngle(draft.from, opt.scenePoint) : opt.scenePoint,
+              to,
               { color: style.value.color, strokeWidth: sceneStroke(), unit },
               micronsPerPixel.value
             )
-          : createShape(
-              t,
-              draft.from,
-              opt.scenePoint,
-              { color: style.value.color, strokeWidth: sceneStroke(), filled: style.value.filled },
-              opt.e.shiftKey
-            )
+          : t === 'marker'
+            ? // Pulled out of the spot pressed on: the circle follows the pointer, a line leads back.
+              markerAt(to, draft.from)
+            : createShape(
+                t,
+                draft.from,
+                opt.scenePoint,
+                {
+                  color: style.value.color,
+                  strokeWidth: sceneStroke(),
+                  filled: style.value.filled
+                },
+                opt.e.shiftKey
+              )
       draft.object.selectable = false
       // On top while it is drawn; into its layer when done.
       c.add(draft.object)
@@ -1332,8 +1384,18 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
       opt.target.setCursorByClick(opt.e)
     }
     if (draft) {
-      const obj = draft.object
+      let obj = draft.object
+      const from = draft.from
       draft = null
+      if (tool.value === 'marker') {
+        // A click – or a drag that stays within the circle – places it right there, without line.
+        if (obj) c.remove(obj)
+        const at = obj && isMarker(obj) ? markerGeometry(obj).at : from
+        const pulled =
+          Math.hypot(at.x - from.x, at.y - from.y) > markerRadius(style.value.fontSize * unit)
+        obj = pulled ? markerAt(at, from) : markerAt(from, null)
+        c.add(obj)
+      }
       if (obj) {
         // Discard accidental clicks that produced (almost) nothing. (A measuring line has its
         // label, so only its length tells.)
@@ -1407,11 +1469,12 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   // ── Loading and the history ─────────────────────────────────────────────────
 
   /**
-   * Objects read from JSON: measuring lines get their locks back (not serialized) and show their
-   * length with the current scale (it may have changed since).
+   * Objects read from JSON: measuring lines and markers get their locks back (not serialized), and
+   * measuring lines show their length with the current scale (it may have changed since).
    */
   function prepareLoaded(objects: FabricObject[]): FabricObject[] {
     for (const obj of objects) {
+      if (isMarker(obj)) lockMarker(obj)
       if (!isMeasure(obj)) continue
       lockMeasure(obj)
       relabel(obj, micronsPerPixel.value)
@@ -2395,10 +2458,18 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
 
   // ── Drawing and describing without the mouse (remote control) ─────────────────
 
-  function shapeFrom(spec: ShapeSpec): FabricObject {
+  /** `pending`: shapes made for the same call – a marker counts on from their numbers. */
+  function shapeFrom(spec: ShapeSpec, pending: FabricObject[]): FabricObject {
     const color = spec.color ?? style.value.color
     const strokeWidth = (spec.strokeWidth ?? style.value.strokeWidth) * unit
     switch (spec.type) {
+      case 'marker':
+        return createMarker(
+          spec.at,
+          spec.label ?? nextMarkerLabel([...drawnObjects(), ...pending]),
+          { color, fontSize: (spec.fontSize ?? style.value.fontSize) * unit },
+          spec.tip
+        )
       case 'measure':
         return createMeasure(
           spec.from,
@@ -2442,7 +2513,8 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
   function drawShapes(specs: ShapeSpec[], layer?: string): FabricObject[] {
     const c = canvas
     if (!c || !specs.length || view) return []
-    const shapes = specs.map(shapeFrom)
+    const shapes: FabricObject[] = []
+    for (const spec of specs) shapes.push(shapeFrom(spec, shapes))
     const target = metaOf(layer)?.type === 'drawing' ? layer! : drawingTarget()
     for (const shape of shapes) placeInLayer(shape, target)
     applyTool() // selectable or not, like everything else with the current tool
@@ -2458,16 +2530,23 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     return drawnObjects().map((obj, index) => {
       const kind = kindOf(obj) ?? null
       const { left, top, width, height } = obj.getBoundingRect()
-      const stroke = isMeasure(obj) ? measureLine(obj) : obj
+      const marker = isMarker(obj)
+      const stroke = isMeasure(obj) ? measureLine(obj) : marker ? null : obj
+      const paint = kind === 'text' ? obj.fill : marker ? markerColor(obj) : stroke?.stroke
       const info: DrawnObject = {
         index,
         kind,
         layer: layerIdOf(obj) ?? '',
         box: { left: round(left), top: round(top), width: round(width), height: round(height) },
-        color: toHex(String((kind === 'text' ? obj.fill : stroke?.stroke) ?? '')) || null,
+        color: toHex(String(paint ?? '')) || null,
         selected: selected.includes(obj)
       }
-      if (kind === 'text' && obj instanceof IText) {
+      if (marker) {
+        const { tip } = markerGeometry(obj)
+        info.text = markerLabel(obj)
+        info.fontSize = round(markerSize(obj) / unit, 1)
+        info.tip = tip && { x: round(tip.x), y: round(tip.y) }
+      } else if (kind === 'text' && obj instanceof IText) {
         info.text = obj.text
         info.fontSize = round(obj.fontSize / unit, 1)
         info.fontFamily = fontName(obj.fontFamily)
@@ -2628,6 +2707,7 @@ export function useDrawingCanvas({ host, tool, style }: UseDrawingCanvasOptions)
     canRedo,
     hasSelection,
     textSelected,
+    markerSelected,
     isEmpty,
     dirty,
     editingText,

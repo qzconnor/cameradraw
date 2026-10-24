@@ -25,6 +25,8 @@ defineProps<{
    * alignment and size.
    */
   forText?: boolean
+  /** Only numbered markers are selected (also with another tool): their size. */
+  forMarker?: boolean
 }>()
 
 const editor = useEditorStore()
@@ -73,6 +75,12 @@ function onToolChange(value: AcceptableValue): void {
       <Separator orientation="vertical" class="mx-1 my-auto h-5" />
       <SizePicker v-model="editor.fontSize" kind="font" :options="FONT_SIZE_PRESETS" />
     </template>
+    <SizePicker
+      v-else-if="editor.tool === 'marker' || forMarker"
+      v-model="editor.fontSize"
+      kind="marker"
+      :options="FONT_SIZE_PRESETS"
+    />
     <SizePicker v-else v-model="editor.strokeWidth" kind="stroke" :options="STROKE_PRESETS" />
   </div>
 </template>
