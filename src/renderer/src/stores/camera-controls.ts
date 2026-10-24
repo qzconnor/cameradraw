@@ -400,6 +400,16 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
       throw new Error(`Diese Kamera lässt „${CONTROL_LABELS[name]}“ nicht einstellen.`)
     }
     const change = normalize(patch)
+    // Manual mode alone does not switch the automatic off (Windows) – it needs a value, so keep
+    // the one the camera uses right now.
+    for (const control of controls.value) {
+      if (control.kind !== 'auto' || !control.range) continue
+      const { mode, value } = AUTO_CONTROLS[control.name]
+      const current = values.value[value]
+      if (change[mode] === 'manual' && change[value] === undefined && current !== undefined) {
+        change[value] = current
+      }
+    }
     remember(change)
     // Shown at once, so a slider follows the pointer; the camera's answer replaces it.
     values.value = { ...values.value, ...change }
