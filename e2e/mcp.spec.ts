@@ -498,9 +498,9 @@ test.describe('switched on', () => {
     expect(reset.controlsChanged).toBe(false)
 
     expect(camera.controls.powerLineFrequency).toBeUndefined() // no USB camera
-    const soft = await call(client, 'set_camera', { softContrast: true })
-    expect(soft.softContrast).toBe(true)
-    await expect(page.locator('main video')).toHaveCSS('filter', /contrast/)
+    // Soft contrast imitates Logi Capture – the fake camera is no Logitech camera.
+    expect(camera.softContrast).toBeUndefined()
+    expect(await callError(client, 'set_camera', { softContrast: true })).toContain('Logitech')
 
     const max = await call(client, 'set_camera', { resolution: 'max' })
     expect(max.resolutionSetting).toBe('max')

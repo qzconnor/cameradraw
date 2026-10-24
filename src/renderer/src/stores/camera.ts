@@ -2,6 +2,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { createEventHook } from '@vueuse/core'
 import type { CameraResolution } from '@shared/camera-controls'
+import { parseUsbId } from '@/lib/camera-info'
 import { useSettingsStore } from './settings'
 
 export interface CameraDevice {
@@ -36,6 +37,8 @@ type WithZoom<T> = T & { zoom?: ZoomRange }
 
 /** Resolution `standard`: up to Full HD at 30 frames per second. */
 const STANDARD_SIZE = { width: 1920, height: 1080 }
+/** USB vendor id of Logitech. */
+const LOGITECH_VENDOR = '046d'
 
 const VIDEO_CONSTRAINTS: Record<CameraResolution, MediaTrackConstraints> = {
   standard: {
@@ -114,9 +117,14 @@ export const useCameraStore = defineStore('camera', () => {
       ? 'max'
       : 'standard'
   )
+  /** "Weicher Kontrast" imitates Logi Capture – offered for Logitech cameras only. */
+  const softContrastAvailable = computed(
+    () => parseUsbId(selectedLabel.value)?.vendorId === LOGITECH_VENDOR
+  )
   /** "Weicher Kontrast" is on for this camera: picture and captures in the TV range 16–235. */
   const softContrast = computed(
-    () => !!selectedLabel.value && !!settings.cameraControls[selectedLabel.value]?.softContrast
+    () =>
+      softContrastAvailable.value && !!settings.cameraControls[selectedLabel.value!]?.softContrast
   )
   /** The camera offers more than Full HD – only then there is a resolution to choose. */
   const offersMoreThanStandard = computed(() => {
@@ -358,6 +366,11 @@ export const useCameraStore = defineStore('camera', () => {
   async function setSoftContrast(on: boolean): Promise<void> {
     const label = selectedLabel.value
     if (!label) throw new Error('Es ist keine Kamera gewählt.')
+    if (on && !softContrastAvailable.value) {
+      throw new Error(
+        'Den weichen Kontrast gibt es nur für Logitech-Kameras – er ahmt deren Logi Capture nach.'
+      )
+    }
     await settings.updateCameraControls(label, (entry) => {
       const next = { ...entry }
       if (on) next.softContrast = true
@@ -442,6 +455,7 @@ export const useCameraStore = defineStore('camera', () => {
     resolutionSetting,
     offersMoreThanStandard,
     softContrast,
+    softContrastAvailable,
     refreshing,
     paused,
     minimized,
