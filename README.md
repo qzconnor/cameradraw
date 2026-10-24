@@ -79,7 +79,15 @@ die auch später noch Form für Form bearbeitbar bleiben.
   nach Zeitraum. Bilder lassen sich per Drag & Drop in Projekte ziehen, umbenennen (`F2`),
   verschieben und in den Papierkorb legen.
 - **Kamera** – unterscheidet echte von virtuellen Kameras (OBS, DroidCam, …), verbindet sich nach
-  dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital.
+  dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital. Kameras,
+  die mehr als Full HD können, nehmen auf Wunsch in ihrer höchsten Auflösung auf.
+- **Bildeinstellungen der Kamera** – Belichtung, Weißabgleich und Fokus (jeweils automatisch oder
+  von Hand), Helligkeit, Kontrast, Sättigung und Schärfe – direkt an der Kamera, also im Livebild
+  und in jeder Aufnahme. Der Knopf mit der Sonne unten rechts im Livebild öffnet sie. Angezeigt wird
+  nur, was die Kamera anbietet und auch wirklich annimmt; CameraDraw merkt es sich pro Kamera und
+  stellt es bei jedem Start wieder ein. „Zurücksetzen“ holt die Werte von vorher zurück.
+- **Einstellungen in Tabs** – Allgemein (Speicherordner, Ambient Light), Kamera (Gerät, Auflösung,
+  Spiegeln, Zoom), Bild (siehe oben) und KI (MCP-Server).
 - **Geräte-Module** – Gerätetypen bringen eigene Funktionen mit, z. B. Foto- und Zoom-Tasten des
   Generalplus-USB-Mikroskops.
 - **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
@@ -195,7 +203,7 @@ KI-Assistent die laufende App bedienen – alles passiert sichtbar im Fenster, s
 klicken: Kamera wählen und pausieren, Bild anhalten oder direkt speichern, Bilder in der Galerie
 suchen, öffnen, umbenennen und verschieben, im Editor zeichnen, messen, ändern und speichern.
 
-**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Unter **Verbindung** wählst du, wie
+**Einschalten:** Einstellungen → Tab **KI** → **KI-Steuerung (MCP-Server)**. Unter **Verbindung** wählst du, wie
 Clients sich verbinden; darunter stehen Status und die Einrichtung pro Client zum Kopieren:
 
 - **HTTP** – der Client verbindet sich mit einer Adresse auf diesem Rechner (Port änderbar): Claude
@@ -231,6 +239,12 @@ angefügten Fläche. `editor_state` liefert den Quelltext und die Größe des fo
 oder rechts aus – `at` ist dann die Mitte oder das rechte Ende der Oberkante; beides gibt es auch bei
 `editor_update` und `editor_set_tool`.
 
+Die Bildeinstellungen der Kamera stehen in `get_state` unter `camera.controls` – mit Wert, Bereich
+und Modus, so wie `set_camera` sie mit `controls` annimmt (z. B. `{ "exposureTime": 156.25 }` für
+1/64 s; ein Wert schaltet auf manuell, `"exposureMode": "continuous"` zurück auf automatisch).
+`resetControls: true` stellt die Werte von vorher wieder her, `resolution: "max"` wählt die höchste
+Auflösung der Kamera.
+
 Ein Assistent zeichnet in eigene Ebenen (in der Liste mit Roboter-Symbol), nicht in die des
 Benutzers: `editor_draw` ohne `layer` nimmt die zuletzt benutzte eigene, beim ersten Mal eine neue
 mit dem Namen des Clients. Mit `editor_layers` legt er beliebig viele an (`add`, z. B. „Messungen“
@@ -246,8 +260,8 @@ Einstellungen. Dort steht auch, ob der Server läuft und welcher Client zuletzt 
 
 | Bereich   | Tools                                                                                                                                                                                                                                                                                                                                                                                        |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`, `list_fonts`                                                                                                                                                                                                                                                                                                                     |
-| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                                                                                                                                          |
+| Überblick | `get_state`, `screenshot`, `show_panel` (auch ein Tab der Einstellungen), `update_settings`, `list_fonts`                                                                                                                                                                                                                                                                                    |
+| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom, Auflösung, Bildeinstellungen), `capture`, `set_burst`                                                                                                                                                                                                                                                                            |
 | Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                                                                                                                                       |
 | Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_layers`, `editor_insert_image`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_rotate`, `editor_perspective`, `editor_extend`, `editor_reset_image`, `editor_save`, `editor_copy_image`, `editor_close` |
 | Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                                                                                                                                         |
@@ -377,7 +391,8 @@ Editor, Speichern, Messen, Zoom, Fenster, Updates) und laufen bei jedem Pull Req
 
 ```
 src/
-  shared/            Typen, IPC-Kanäle und Namensregeln (names.ts) für Main, Preload und Renderer
+  shared/            Typen, IPC-Kanäle, Namensregeln (names.ts) und Bildeinstellungen der Kamera
+                     (camera-controls.ts) für Main, Preload und Renderer
   main/              settings.ts (JSON in userData), library.ts (Bilder und Projekte im
                      Speicherordner), protocol.ts (cdraw:// für Bilder/Thumbnails), cameras.ts
                      (Windows-Geräteverwaltung: echte vs. virtuelle Kameras), buttons.ts (Dienst),
@@ -386,7 +401,8 @@ src/
                      zur Oberfläche), ipc.ts
   preload/           window.api (contextBridge, sandboxed)
   renderer/src/
-    stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom), gallery (Projekte,
+    stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom/Auflösung),
+                     camera-controls (Bildeinstellungen der Kamera), gallery (Projekte,
                      Suche, Sortierung), editor, burst (Serienaufnahme), updates, panels,
                      hardware, modules, mcp
     composables/     useDrawingCanvas (fabric.js-Canvas, Ebenen, Werkzeuge, Undo/Redo, Export),
@@ -459,7 +475,9 @@ den Wert genauso oft über `IOCTL_KS_PROPERTY` am Kameratreiber und zoomt dann d
 `cameradraw-buttons.exe brightness 1b3f:2002` als normaler Benutzer, ohne Dienst und ohne USBPcap
 (`src/main/controls.ts`, ein Prozess pro Gerät, endet mit der App). Chromium hilft hier nicht:
 `getSettings().brightness` liefert nur einen zwischengespeicherten Wert. Die Helligkeit darf nie
-gesetzt werden.
+gesetzt werden – das Modul sperrt sie deshalb auch in den Bildeinstellungen (`lockedControls`). Den
+Kontrast meldet das Mikroskop, nimmt ihn aber nicht an (auch nicht den aktuellen Wert); CameraDraw
+probiert das beim ersten Start der Kamera aus und blendet ihn dann aus.
 
 Das Foto-Signal verarbeitet der Windows-Kameratreiber (`usbvideo.sys`) selbst: Das Mikroskop meldet
 Standbild-Methode 2, also macht der Treiber aus dem Druck eine eigene Standbild-Aufnahme. Das

@@ -27,7 +27,7 @@ const panels = usePanelsStore()
           role="status"
           :aria-label="`${mcp.clientName} ${mcp.busy ? mcp.activity : 'bedient CameraDraw'}`"
           class="mcp-ring no-drag relative max-w-80 rounded-full p-px shadow-[0_0_18px_-4px] shadow-fuchsia-500/60 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          @click="panels.setOpen('settings', true)"
+          @click="panels.openSettings('ai')"
         >
           <span
             class="flex h-6 min-w-0 items-center gap-1.5 rounded-full bg-sidebar/95 pr-3 pl-1 text-xs"

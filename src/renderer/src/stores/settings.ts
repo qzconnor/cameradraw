@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { CameraControlSettings } from '@shared/camera-controls'
 import { DEFAULT_MCP_PORT } from '@shared/mcp'
 import type { AppSettings, AppState } from '@shared/types'
 
@@ -18,6 +19,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const disabledModules = computed(() => settings.value?.disabledModules ?? [])
   const cameraModules = computed(() => settings.value?.cameraModules ?? {})
   const cameraScales = computed(() => settings.value?.cameraScales ?? {})
+  const cameraControls = computed(() => settings.value?.cameraControls ?? {})
   const mcpEnabled = computed(() => settings.value?.mcpEnabled ?? false)
   const mcpTransport = computed(() => settings.value?.mcpTransport ?? 'http')
   const mcpPort = computed(() => settings.value?.mcpPort ?? DEFAULT_MCP_PORT)
@@ -42,6 +44,20 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  /** Changes what is stored for one camera; an entry left with nothing in it is dropped. */
+  async function updateCameraControls(
+    label: string,
+    change: (entry: CameraControlSettings) => CameraControlSettings
+  ): Promise<void> {
+    const map = { ...cameraControls.value }
+    const entry = change(map[label] ?? { values: {}, originals: {} })
+    const empty =
+      !entry.resolution && !Object.keys(entry.values).length && !Object.keys(entry.originals).length
+    if (empty) delete map[label]
+    else map[label] = entry
+    await update({ cameraControls: map })
+  }
+
   return {
     settings,
     saveDirAvailable,
@@ -55,10 +71,12 @@ export const useSettingsStore = defineStore('settings', () => {
     disabledModules,
     cameraModules,
     cameraScales,
+    cameraControls,
     mcpEnabled,
     mcpTransport,
     mcpPort,
     load,
-    update
+    update,
+    updateCameraControls
   }
 })

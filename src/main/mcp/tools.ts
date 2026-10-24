@@ -72,6 +72,19 @@ const remote = <A extends RemoteAction>(
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
 const point = z.object({ x: z.number(), y: z.number() })
+const controlMode = z.enum(['continuous', 'manual'])
+const cameraControls = z.object({
+  exposureMode: controlMode.optional(),
+  exposureTime: z.number().positive().optional().describe('Units of 100 µs, e.g. 156.25 = 1/64 s'),
+  whiteBalanceMode: controlMode.optional(),
+  colorTemperature: z.number().positive().optional().describe('Kelvin'),
+  focusMode: controlMode.optional(),
+  focusDistance: z.number().optional(),
+  brightness: z.number().optional(),
+  contrast: z.number().optional(),
+  saturation: z.number().optional(),
+  sharpness: z.number().optional()
+})
 const indices = z
   .array(z.number().int().min(0))
   .describe('Object indices from editor_state (0 = bottom of the stack)')
@@ -187,7 +200,7 @@ export function createMcpServer(): McpServer {
   // General
   add(
     'get_state',
-    'What the app shows right now: camera or editor, open panel and dialogs, camera status and zoom, burst capture, the image in the editor, the save folder and the settings. Start here.',
+    'What the app shows right now: camera or editor, open panel and dialogs, camera status, zoom, resolution and picture controls (exposure, white balance, focus … with their ranges), burst capture, the image in the editor, the save folder and the settings. Start here.',
     none,
     READ_ONLY,
     () => remote('state', {})
@@ -261,11 +274,12 @@ export function createMcpServer(): McpServer {
   )
   add(
     'show_panel',
-    'Opens a side panel (gallery, settings, modules, updates) or closes it ("none"). For the gallery, a project and a search can be shown.',
+    'Opens a side panel (gallery, settings, modules, updates) or closes it ("none"). For the gallery, a project and a search can be shown; for the settings a tab: general (save folder, ambient light), camera (camera, resolution, mirroring, zoom), picture (exposure, white balance, focus, brightness … of the camera), ai (this MCP server).',
     z.object({
       panel: z.enum(['gallery', 'settings', 'modules', 'updates', 'none']),
       project: project.optional(),
-      query: z.string().optional()
+      query: z.string().optional(),
+      tab: z.enum(['general', 'camera', 'picture', 'ai']).optional()
     }),
     CHANGES,
     (args) => remote('showPanel', args)
@@ -301,8 +315,14 @@ export function createMcpServer(): McpServer {
   )
   add(
     'set_camera',
-    'Pauses or resumes the camera picture and sets its zoom (1 = none, up to maxZoom from get_state).',
-    z.object({ paused: z.boolean().optional(), zoom: z.number().min(1).optional() }),
+    'Pauses or resumes the camera picture, sets its zoom (1 = none, up to maxZoom from get_state) and resolution ("standard": up to Full HD, "max": the largest the camera offers, see maxResolution – reopens the camera). controls sets what the camera itself adjusts – only those listed in get_state → camera.controls, within their min/max: exposure, white balance and focus each have a mode ("continuous" = automatic, "manual") and a value used in manual mode (exposureTime in units of 100 µs, colorTemperature in Kelvin, focusDistance in units of the camera) – a value alone switches to manual; brightness, contrast, saturation and sharpness are numbers in units of the camera. The camera may round a value; the result shows what it uses. CameraDraw remembers them for this camera. resetControls: true restores the values the camera had before CameraDraw changed them (applied before controls).',
+    z.object({
+      paused: z.boolean().optional(),
+      zoom: z.number().min(1).optional(),
+      resolution: z.enum(['standard', 'max']).optional(),
+      controls: cameraControls.optional(),
+      resetControls: z.boolean().optional()
+    }),
     CHANGES,
     (args) => remote('setCamera', args)
   )

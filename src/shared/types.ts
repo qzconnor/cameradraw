@@ -1,3 +1,4 @@
+import type { CameraControlSettings } from './camera-controls'
 import type { McpTransport } from './mcp'
 
 /** Persisted application settings (stored as JSON in the userData folder). */
@@ -25,6 +26,8 @@ export interface AppSettings {
   cameraModules: Record<string, string>
   /** Camera label → its last calibration, applied to new pictures. */
   cameraScales: Record<string, CameraScale>
+  /** Camera label → resolution and picture controls set in CameraDraw. */
+  cameraControls: Record<string, CameraControlSettings>
   /** Let AI assistants control the app through the MCP server (see `shared/mcp.ts`). */
   mcpEnabled: boolean
   /** How MCP clients connect, see `McpTransport`. */

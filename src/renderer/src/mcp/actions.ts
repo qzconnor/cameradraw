@@ -8,6 +8,7 @@ import {
   splitExtension,
   splitItemPath
 } from '@shared/names'
+import { AUTO_CONTROLS, CONTROL_MODES } from '@shared/camera-controls'
 import type { RemoteAction, RemoteActionArgs } from '@shared/mcp'
 import type { GalleryItem } from '@shared/types'
 import type { LayerDescription } from '@/composables/useDrawingCanvas'
@@ -17,6 +18,7 @@ import { formatScale } from '@/editor/measure'
 import { isBlockingOverlayOpen } from '@/lib/keyboard'
 import { useBurstStore } from '@/stores/burst'
 import { useCameraStore } from '@/stores/camera'
+import { useCameraControlsStore, type ControlRange } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
 import { useMcpStore } from '@/stores/mcp'
@@ -107,6 +109,7 @@ function plain(value: unknown): unknown {
 function createActions(): Actions {
   const settings = useSettingsStore()
   const camera = useCameraStore()
+  const cameraControls = useCameraControlsStore()
   const editor = useEditorStore()
   const gallery = useGalleryStore()
   const panels = usePanelsStore()
@@ -120,6 +123,32 @@ function createActions(): Actions {
     saved: burst.count
   })
 
+  /** The camera's picture controls with their values and ranges, as set_camera takes them. */
+  function controlsState(): Record<string, unknown> {
+    const values = cameraControls.values
+    const ranged = (
+      value: unknown,
+      range: ControlRange,
+      unit?: string
+    ): Record<string, unknown> => ({
+      value,
+      ...range,
+      ...(unit ? { unit } : {})
+    })
+    const out: Record<string, unknown> = {}
+    for (const control of cameraControls.controls) {
+      if (control.kind === 'value') {
+        out[control.name] = ranged(values[control.name], control.range)
+        continue
+      }
+      const { mode, value } = AUTO_CONTROLS[control.name]
+      out[mode] = { value: values[mode], options: CONTROL_MODES }
+      const unit = { exposureTime: '100 µs', colorTemperature: 'K' }[value as string]
+      if (control.range) out[value] = ranged(values[value], control.range, unit)
+    }
+    return out
+  }
+
   const cameraState = (): Record<string, unknown> => ({
     status: camera.status,
     paused: camera.paused,
@@ -127,6 +156,14 @@ function createActions(): Actions {
       ? { id: camera.selectedId, label: camera.selectedLabel, connected: !camera.selectedMissing }
       : null,
     resolution: camera.resolution,
+    resolutionSetting: camera.resolutionSetting,
+    maxResolution: camera.maxResolution,
+    controls: controlsState(),
+    controlsChanged: cameraControls.changed,
+    ...(cameraControls.lockedControls.length && cameraControls.lock
+      ? { controlsLocked: cameraControls.lock }
+      : {}),
+    ...(cameraControls.refused.length ? { controlsRefused: cameraControls.refused } : {}),
     zoom: camera.zoom,
     maxZoom: camera.maxZoom,
     zoomMode: camera.zoomMode,
@@ -395,10 +432,14 @@ function createActions(): Actions {
       }
     },
 
-    async showPanel({ panel, project, query }) {
+    async showPanel({ panel, project, query, tab }) {
       if (panel === 'none') {
         panels.closeAll()
         return { panel: null }
+      }
+      if (tab !== undefined) {
+        if (panel !== 'settings') throw new Error('Tabs gibt es nur in den Einstellungen.')
+        panels.settingsTab = tab
       }
       if (panel === 'gallery') {
         if (project !== undefined) {
@@ -451,7 +492,7 @@ function createActions(): Actions {
       return cameraState()
     },
 
-    async setCamera({ paused, zoom }) {
+    async setCamera({ paused, zoom, resolution, controls, resetControls }) {
       if (paused === true && !camera.paused) {
         if (camera.status !== 'live') throw new Error('Die Kamera läuft gerade nicht.')
         camera.setPaused(true)
@@ -464,6 +505,25 @@ function createActions(): Actions {
             'Die Kamera startet nicht.'
           )
         }
+      }
+      if (resolution !== undefined && resolution !== camera.resolutionSetting) {
+        if (!camera.selectedLabel) throw new Error('Es ist keine Kamera gewählt.')
+        await camera.setResolution(resolution)
+      }
+      if (resetControls || (controls && Object.keys(controls).length)) {
+        if (camera.status !== 'live' && camera.status !== 'starting') {
+          throw new Error(
+            cameraProblem() ||
+              'Die Kamera ist gerade aus – Bildeinstellungen gehen nur, solange das Livebild läuft.'
+          )
+        }
+        // A camera that just (re)started reads its controls first.
+        await waitFor(
+          () => (camera.status === 'live' && !cameraControls.loading) || cameraProblem(),
+          'Die Kamera startet nicht.'
+        )
+        if (resetControls) await cameraControls.reset()
+        if (controls && Object.keys(controls).length) await cameraControls.set(controls)
       }
       if (zoom !== undefined) camera.setZoom(zoom)
       return cameraState()
