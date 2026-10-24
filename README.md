@@ -26,6 +26,11 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Wiederholen. Linie, Pfeil, Rechteck und Ellipse teilen sich einen Knopf – ein Klick zeigt alle
   (wie bei der Farbe), samt „Füllen“. Für Details lässt sich das Bild bis 8× vergrößern und
   verschieben.
+- **Nummerierte Marker** – Das Werkzeug „Nummer“ (`N`) setzt mit jedem Klick einen farbigen Kreis
+  mit der nächsten Zahl (1, 2, 3 …) – für Befunde, auf die ein Text neben dem Bild verweist. Wer
+  von einer Stelle aus zieht, zieht die Nummer heraus: Eine Linie führt zurück zur Stelle, der Kreis
+  verdeckt sie nicht. Die Größe kommt aus der Werkzeugleiste, die Zahl ist weiß oder auf hellen
+  Farben schwarz. Gezählt wird immer ab der höchsten Nummer weiter, auch nach dem Löschen.
 - **Serienaufnahme** – Viele Bilder hintereinander, ohne jedes Mal den Editor: Mit eingeschalteter
   Serienaufnahme speichern `Leertaste`, Auslöser und Foto-Taste das Bild sofort ins gewählte
   Projekt, `Shift+Leertaste` tut das auch einzeln. Gezeichnet werden kann später – „Bearbeiten“ im
@@ -96,7 +101,7 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
   installiert sie mit einem Neustart. Die Versionshinweise aller Versionen stehen im Updates-Panel.
 - **KI-Steuerung (MCP)** – Auf Wunsch bedienen KI-Assistenten wie Claude Code die laufende App über
-  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, zeichnen, messen, speichern – live im
+  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, zeichnen, nummerieren, messen, speichern – live im
   Fenster zu sehen. Solange ein Assistent arbeitet, leuchtet der Fensterrand in seinen Farben, oben
   steht, wer gerade was tut („Claude Code zeichnet …“), und ein eigener Zeiger mit seinem Namen
   zeigt, wohin er klickt. Standardmäßig aus.
@@ -152,6 +157,7 @@ später in den Einstellungen ändern.
 | -------------------- | ---------------------------------------------------------------------- |
 | `V` `P` `M` `E`      | Auswählen, Stift, Textmarker, Radierer                                 |
 | `L` `A` `R` `O` `T`  | Linie, Pfeil, Rechteck, Ellipse, Text (`Shift` = gerade / quadratisch) |
+| `N`                  | Nummer: Klick setzt sie, Ziehen von einer Stelle aus mit Linie dorthin |
 | `D`                  | Messen – Strecke mit Längenangabe (`Shift` = gerade)                   |
 | `C`                  | Perspektivisch zuschneiden: Ecken ziehen (Pfeiltasten: 1 px), `Enter`  |
 | Bildkante ziehen     | Fläche anfügen (`Shift` = Viertel des Bildes, `Esc` bricht ab)         |

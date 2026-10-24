@@ -31,6 +31,8 @@ Editor coordinates are image pixels of the canvas (0,0 = top left; size in edito
 
 The picture has layers (editor_state → layers, bottom first): image layers (the frame, and pictures pulled in from the library with editor_insert_image – each can be cropped and turned on its own, also later), space added beside the picture, and drawing layers holding the drawn objects. The user works in their own layers; draw into layers of your own: editor_draw without layer uses the layer you used last (a new one of yours on top the first time). Make as many as you need with editor_layers add (e.g. one for labels, one for measurements), switch with editor_layers use or the layer parameter of editor_draw, and reorder, hide, rename, copy or delete them with editor_layers.
 
+Numbered markers (type "marker") are filled circles with a number – for findings that a text beside the picture refers to ("1: cold solder joint"). Without label they count on (1, 2, 3 … – one more than the highest so far); with tip a line leads from the circle to the spot, so the circle does not cover it. Their size is fontSize, their colour the circle's.
+
 Texts are Markdown (GitHub flavour) and are drawn formatted: # headings, **bold**, _italic_, ~~strike-through~~, \`code\`, lists (-, 1., - [ ] / - [x] tasks, nested), > quotes, tables, fenced code blocks and --- rules. Every line break is kept and an empty line stays an empty line; lines only break where the text has a line break. Plain text stays plain (escape a literal *, _ or # with a backslash). editor_state returns the source; the box is the formatted size. Texts can use any installed font (fontFamily, see list_fonts; default "Geist", the app's own) and be aligned left, center or right (textAlign): the lines line up that way, and the text's "at" point is its top left, top middle or top right corner.
 
 screenshot shows the window; click, drag, press_key and type_text operate it like a person (window coordinates in CSS pixels), e.g. for dialogs. While you work, the app shows the user a glowing frame, what you are doing and a pointer with your name where you click – they are not part of the app's content. App texts and messages are German.`
@@ -158,6 +160,18 @@ const shape = z.union([
     at: point.describe('Top left corner – top middle or top right with textAlign center or right'),
     text: markdown,
     ...style
+  }),
+  z.object({
+    type: z.literal('marker'),
+    at: point.describe('Middle of the circle'),
+    tip: point.optional().describe('The spot it marks – a line leads there from the circle'),
+    label: z
+      .string()
+      .min(1)
+      .max(4)
+      .optional()
+      .describe('Default: the next number (one more than the highest so far)'),
+    ...style
   })
 ])
 
@@ -170,6 +184,7 @@ const tool = z.enum([
   'rect',
   'ellipse',
   'text',
+  'marker',
   'eraser',
   'measure'
 ])
@@ -225,7 +240,7 @@ export function createMcpServer(): McpServer {
   )
   add(
     'press_key',
-    'Presses a key like on the keyboard, with modifiers: "Space", "Shift+Space", "Escape", "Delete", "Control+Z", "Control+Shift+S", "ArrowLeft", "+", "g". Uses the app\'s shortcuts (Space captures, G toggles the gallery, P pauses, V/P/M/E/L/A/R/O/T/D pick editor tools …).',
+    'Presses a key like on the keyboard, with modifiers: "Space", "Shift+Space", "Escape", "Delete", "Control+Z", "Control+Shift+S", "ArrowLeft", "+", "g". Uses the app\'s shortcuts (Space captures, G toggles the gallery, P pauses, V/P/M/E/L/A/R/O/T/N/D pick editor tools …).',
     z.object({
       keys: z.string().min(1),
       times: z.number().int().min(1).max(50).optional()
@@ -448,7 +463,7 @@ export function createMcpServer(): McpServer {
   // Editor
   add(
     'editor_state',
-    'The image in the editor: path (null = new capture), canvas size, unsaved changes, scale for measuring, tool and style, its layers (bottom first: id, type image / fill / drawing, name, visible, locked, owner "ai" for yours, the one the user works on, objects of drawing layers, box and adjustments of images), the layer you draw into by default (aiLayer), and every drawn object with its index, layer, kind, bounding box, colour and text or measured length.',
+    'The image in the editor: path (null = new capture), canvas size, unsaved changes, scale for measuring, tool and style, its layers (bottom first: id, type image / fill / drawing, name, visible, locked, owner "ai" for yours, the one the user works on, objects of drawing layers, box and adjustments of images), the layer you draw into by default (aiLayer), and every drawn object with its index, layer, kind, bounding box, colour and text (the label of a marker, with tip: the spot its line leads to) or measured length.',
     none,
     READ_ONLY,
     () => remote('editorState', {})
@@ -469,7 +484,7 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_draw',
-    'Draws objects onto the image (image pixels; one undo step) – into a drawing layer of your own: the one you used last, or layer (any drawing layer, yours from then on). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left, or top middle / top right with textAlign center / right; Markdown, e.g. a heading, a list or a table of findings; fontFamily from list_fonts). Colour, sizes, font and alignment default to the editor\'s current style.',
+    'Draws objects onto the image (image pixels; one undo step) – into a drawing layer of your own: the one you used last, or layer (any drawing layer, yours from then on). Types: line, arrow (from → to, tip at "to"), rect, ellipse (corners), measure (measuring line with its length), pen and highlighter (points), text (at = top left, or top middle / top right with textAlign center / right; Markdown, e.g. a heading, a list or a table of findings; fontFamily from list_fonts), marker (numbered circle at "at", counting on unless label is given; tip: a line to the spot it marks; size = fontSize). Colour, sizes, font and alignment default to the editor\'s current style.',
     z.object({
       shapes: z.array(shape).min(1).max(200),
       layer: layerId.optional()
@@ -511,7 +526,7 @@ export function createMcpServer(): McpServer {
   )
   add(
     'editor_update',
-    'Changes objects: colour, line width, size, font and alignment of texts (a text stays where it is), fill (rectangles, ellipses), the text (Markdown) of a text object, or moves them by moveBy image pixels.',
+    'Changes objects: colour, line width, size, font and alignment of texts (a text stays where it is), fill (rectangles, ellipses), the text (Markdown) of a text object or the label of a marker (fontSize is its size), or moves them by moveBy image pixels.',
     z.object({
       indices,
       ...style,

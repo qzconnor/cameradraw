@@ -63,6 +63,7 @@ const {
   canRedo,
   hasSelection,
   textSelected,
+  markerSelected,
   isEmpty,
   dirty,
   load,
@@ -660,6 +661,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           :class="(cropCorners || imageView) && 'pointer-events-none opacity-40'"
           :inert="!!(cropCorners || imageView)"
           :for-text="editingText || textSelected"
+          :for-marker="markerSelected"
         />
       </div>
 

@@ -90,6 +90,7 @@ export type RemoteTool =
   | 'rect'
   | 'ellipse'
   | 'text'
+  | 'marker'
   | 'eraser'
   | 'measure'
 
@@ -114,6 +115,7 @@ export type RemoteShape = RemoteStyle &
       }
     | { type: 'pen' | 'highlighter'; points: RemotePoint[] }
     | { type: 'text'; at: RemotePoint; text: string }
+    | { type: 'marker'; at: RemotePoint; tip?: RemotePoint; label?: string }
   )
 
 export type RemotePanel = 'gallery' | 'settings' | 'modules' | 'updates' | 'none'

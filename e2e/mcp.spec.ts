@@ -213,6 +213,43 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client numbers findings with markers', async ({ page, workspace }) => {
+    await waitForMcp(page)
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+    await waitForEditor(page)
+
+    // Without labels they count on – also within one call; tip leads a line to the spot.
+    const drawn = await call(client, 'editor_draw', {
+      shapes: [
+        { type: 'marker', at: { x: 300, y: 300 } },
+        { type: 'marker', at: { x: 600, y: 300 }, tip: { x: 700, y: 500 }, color: '#facc15' },
+        { type: 'marker', at: { x: 900, y: 300 }, label: 'A', fontSize: 72 }
+      ]
+    })
+    expect(drawn.objects).toMatchObject([
+      { kind: 'marker', text: '1', fontSize: 48, color: '#ef4444', tip: null },
+      { kind: 'marker', text: '2', color: '#facc15', tip: { x: 700, y: 500 } },
+      { kind: 'marker', text: 'A', fontSize: 72 }
+    ])
+    // The circle sits where asked: a 48 px number in a circle of 72 px.
+    const box = drawn.objects[0].box
+    expect(box.left + box.width / 2).toBeCloseTo(300, -1)
+    expect(box.width).toBeGreaterThan(70)
+
+    const next = await call(client, 'editor_draw', {
+      shapes: [{ type: 'marker', at: { x: 1200, y: 300 } }]
+    })
+    expect(next.objects[3].text).toBe('3')
+    const updated = await call(client, 'editor_update', { indices: [3], text: '7', fontSize: 24 })
+    expect(updated.objects[3]).toMatchObject({ text: '7', fontSize: 24 })
+
+    await call(client, 'editor_save')
+    const saved = readLayers(workspace.library, 'Probe.png').objects
+    expect(saved.map((o) => o['cdKind'])).toEqual(['marker', 'marker', 'marker', 'marker'])
+    await client.close()
+  })
+
   test('a client writes in an installed font and aligns its texts', async ({ page, workspace }) => {
     await waitForMcp(page)
     const client = await connect()
