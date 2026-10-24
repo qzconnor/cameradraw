@@ -213,6 +213,43 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client numbers findings with markers', async ({ page, workspace }) => {
+    await waitForMcp(page)
+    const client = await connect()
+    await call(client, 'open_image', { path: 'Probe.png' })
+    await waitForEditor(page)
+
+    // Without labels they count on – also within one call; tip leads a line to the spot.
+    const drawn = await call(client, 'editor_draw', {
+      shapes: [
+        { type: 'marker', at: { x: 300, y: 300 } },
+        { type: 'marker', at: { x: 600, y: 300 }, tip: { x: 700, y: 500 }, color: '#facc15' },
+        { type: 'marker', at: { x: 900, y: 300 }, label: 'A', fontSize: 72 }
+      ]
+    })
+    expect(drawn.objects).toMatchObject([
+      { kind: 'marker', text: '1', fontSize: 48, color: '#ef4444', tip: null },
+      { kind: 'marker', text: '2', color: '#facc15', tip: { x: 700, y: 500 } },
+      { kind: 'marker', text: 'A', fontSize: 72 }
+    ])
+    // The circle sits where asked: a 48 px number in a circle of 72 px.
+    const box = drawn.objects[0].box
+    expect(box.left + box.width / 2).toBeCloseTo(300, -1)
+    expect(box.width).toBeGreaterThan(70)
+
+    const next = await call(client, 'editor_draw', {
+      shapes: [{ type: 'marker', at: { x: 1200, y: 300 } }]
+    })
+    expect(next.objects[3].text).toBe('3')
+    const updated = await call(client, 'editor_update', { indices: [3], text: '7', fontSize: 24 })
+    expect(updated.objects[3]).toMatchObject({ text: '7', fontSize: 24 })
+
+    await call(client, 'editor_save')
+    const saved = readLayers(workspace.library, 'Probe.png').objects
+    expect(saved.map((o) => o['cdKind'])).toEqual(['marker', 'marker', 'marker', 'marker'])
+    await client.close()
+  })
+
   test('a client writes in an installed font and aligns its texts', async ({ page, workspace }) => {
     await waitForMcp(page)
     const client = await connect()
@@ -516,6 +553,74 @@ test.describe('switched on', () => {
     expect(await callError(client, 'show_panel', { panel: 'gallery', tab: 'ai' })).toContain(
       'Tabs gibt es nur in den Einstellungen.'
     )
+    await client.close()
+  })
+
+  test('a client turns on the focus aid and reads the sharpness', async ({ page }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    // Measured also while the aid is off – e.g. to find the sharpest focus.
+    const state = await call(client, 'get_state')
+    expect(state.camera.focusPeaking).toMatchObject({ enabled: false, level: 'medium' })
+    expect(state.camera.focusPeaking.sharpness).toBeGreaterThan(0)
+
+    const on = await call(client, 'set_focus_peaking', {
+      enabled: true,
+      level: 'low',
+      color: '#FFE600'
+    })
+    expect(on).toMatchObject({ enabled: true, level: 'low', color: '#ffe600' })
+    await expect(page.getByRole('meter', { name: 'Schärfe' })).toBeVisible()
+    expect(await callError(client, 'set_focus_peaking', { level: 'max' })).toMatch(/level/)
+
+    await call(client, 'set_focus_peaking', { enabled: false })
+    await expect(page.getByRole('meter', { name: 'Schärfe' })).toHaveCount(0)
+    await client.close()
+  })
+
+  test('a client lays a reference picture over the live picture', async ({ page }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    const shown = await call(client, 'set_reference', { latest: true, mode: 'difference' })
+    expect(shown).toMatchObject({ path: 'Probe.png', mode: 'difference', drawing: false })
+    await expect(page.locator('img[data-reference]')).toBeVisible()
+    expect((await call(client, 'get_state')).camera.reference.path).toBe('Probe.png')
+
+    expect(await callError(client, 'set_reference', { path: 'Fehlt.png' })).toContain('Fehlt.png')
+    await call(client, 'set_reference', { opacity: 0.8 })
+    await expect(page.locator('img[data-reference]')).toHaveCSS('opacity', '0.8')
+
+    expect(await call(client, 'set_reference', { path: null })).toMatchObject({ path: null })
+    await expect(page.locator('img[data-reference]')).toHaveCount(0)
+    await client.close()
+  })
+
+  test('a client takes a focus stack – swept by the camera or by hand', async ({ page }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    expect((await call(client, 'get_state')).camera.focusStack).toMatchObject({
+      enabled: false,
+      state: 'idle',
+      canSweep: true
+    })
+    const swept = await call(client, 'focus_stack', { action: 'sweep', frames: 4, mode: 'save' })
+    expect(swept.saved.path).toMatch(/^CameraDraw_.*\.png$/)
+    expect(await editorOpen(page)).toBe(false)
+
+    const started = await call(client, 'focus_stack', { action: 'start' })
+    expect(started).toMatchObject({ enabled: true, state: 'recording' })
+    expect(await callError(client, 'capture')).toContain('Fokus-Stapel')
+    await expect.poll(() => storeValue<number>(page, 'focusStack', 'frames')).toBeGreaterThan(1)
+    const finished = await call(client, 'focus_stack', { action: 'finish' })
+    expect(finished.editor).toBeTruthy()
+    await waitForEditor(page)
+    expect(await callError(client, 'focus_stack', { action: 'finish' })).toContain('start')
     await client.close()
   })
 

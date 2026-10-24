@@ -14,6 +14,7 @@ import {
   TextAlignStartIcon,
   TypeIcon
 } from '@lucide/vue'
+import MarkerIcon from '@/components/editor/MarkerIcon.vue'
 
 export type Tool =
   | 'select'
@@ -24,6 +25,7 @@ export type Tool =
   | 'rect'
   | 'ellipse'
   | 'text'
+  | 'marker'
   | 'eraser'
   | 'measure'
 
@@ -53,7 +55,10 @@ export const TOOL_GROUPS: ToolDefinition[][] = [
     { id: 'eraser', label: 'Radierer', icon: EraserIcon, shortcut: 'E' }
   ],
   SHAPE_TOOLS,
-  [{ id: 'text', label: 'Text', icon: TypeIcon, shortcut: 'T' }],
+  [
+    { id: 'text', label: 'Text', icon: TypeIcon, shortcut: 'T' },
+    { id: 'marker', label: 'Nummer', icon: MarkerIcon, shortcut: 'N' }
+  ],
   [{ id: 'measure', label: 'Messen', icon: RulerIcon, shortcut: 'D' }]
 ]
 

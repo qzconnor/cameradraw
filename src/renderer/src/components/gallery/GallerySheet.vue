@@ -26,6 +26,7 @@ import { isOverlayOpen, isTypingTarget } from '@/lib/keyboard'
 import { useEditorStore } from '@/stores/editor'
 import { useGalleryStore } from '@/stores/gallery'
 import { usePanelsStore } from '@/stores/panels'
+import { useReferenceStore } from '@/stores/reference'
 import { useSettingsStore } from '@/stores/settings'
 import DeleteDialog from './DeleteDialog.vue'
 import GalleryDragGhost from './GalleryDragGhost.vue'
@@ -40,6 +41,7 @@ const gallery = useGalleryStore()
 const editor = useEditorStore()
 const settings = useSettingsStore()
 const panels = usePanelsStore()
+const reference = useReferenceStore()
 const drag = useGalleryDrag()
 
 async function run(action: () => Promise<unknown>): Promise<void> {
@@ -48,6 +50,17 @@ async function run(action: () => Promise<unknown>): Promise<void> {
   } catch (err) {
     toast.error('Aktion fehlgeschlagen', { description: errorMessage(err) })
   }
+}
+
+/** Lays the image over the live picture – the gallery makes way for it. */
+function showReference(item: GalleryItem): void {
+  panels.setOpen('gallery', false)
+  void run(async () => {
+    await reference.show(item.path)
+    toast.success('Referenzbild eingeblendet', {
+      description: editor.isOpen ? `${item.name} – über dem Livebild der Kamera` : item.name
+    })
+  })
 }
 
 function openImage(path: string): void {
@@ -421,6 +434,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
                   @delete="askDeleteImage(entry.item)"
                   @move="moveImage(entry.item, $event)"
                   @move-to-new="askName({ mode: 'createProject', thenMove: entry.item })"
+                  @reference="showReference(entry.item)"
                 />
               </li>
             </TransitionGroup>
