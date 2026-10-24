@@ -111,8 +111,9 @@ die auch später noch Form für Form bearbeitbar bleiben.
   (Rechtsklick → „Als Referenz einblenden“). Mit „Differenz“ wird alles schwarz, was
   übereinanderliegt – ideal zum genauen Ausrichten; „Zeichnung“ zeigt das Bild samt Markierungen.
   Das Referenzbild wird nie mit aufgenommen.
-- **Weicher Kontrast** – Auf Wunsch zeigt und speichert CameraDraw das Bild einer Kamera wie Logi
-  Capture im Bereich 16–235: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger.
+- **Weicher Kontrast** – Bei Logitech-Kameras zeigt und speichert CameraDraw das Bild auf Wunsch
+  wie Logi Capture im Bereich 16–235: Helles frisst nicht aus, Farben und Farbstiche wirken
+  ruhiger.
 - **Einstellungen in Tabs** – Allgemein (Speicherordner, Ambient Light), Kamera (Gerät, Auflösung,
   Spiegeln, Zoom), Bild (siehe oben) und KI (MCP-Server).
 - **Geräte-Module** – Gerätetypen bringen eigene Funktionen mit, z. B. Foto- und Zoom-Tasten des

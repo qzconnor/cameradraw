@@ -67,26 +67,29 @@ async function reset(): Promise<void> {
   </div>
 
   <FieldGroup v-else>
-    <Field orientation="horizontal">
-      <FieldContent>
-        <!-- Clicking the label toggles the switch. -->
-        <FieldLabel for="settings-soft-contrast" class="cursor-pointer"
-          >Weicher Kontrast</FieldLabel
-        >
-        <FieldDescription>
-          Wie in Logi Capture: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger. Gilt
-          auch für Aufnahmen.
-        </FieldDescription>
-      </FieldContent>
-      <Switch
-        id="settings-soft-contrast"
-        class="self-center"
-        :model-value="camera.softContrast"
-        @update:model-value="setSoftContrast"
-      />
-    </Field>
+    <!-- Imitates Logi Capture – only for Logitech cameras. -->
+    <template v-if="camera.softContrastAvailable">
+      <Field orientation="horizontal">
+        <FieldContent>
+          <!-- Clicking the label toggles the switch. -->
+          <FieldLabel for="settings-soft-contrast" class="cursor-pointer"
+            >Weicher Kontrast</FieldLabel
+          >
+          <FieldDescription>
+            Wie in Logi Capture: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger. Gilt
+            auch für Aufnahmen.
+          </FieldDescription>
+        </FieldContent>
+        <Switch
+          id="settings-soft-contrast"
+          class="self-center"
+          :model-value="camera.softContrast"
+          @update:model-value="setSoftContrast"
+        />
+      </Field>
 
-    <FieldSeparator />
+      <FieldSeparator />
+    </template>
 
     <FieldDescription v-if="adjustable">
       Stellt die Kamera selbst ein – das wirkt auf das Livebild und jede Aufnahme. CameraDraw merkt

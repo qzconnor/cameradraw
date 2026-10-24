@@ -197,7 +197,8 @@ function createActions(): Actions {
     resolution: camera.resolution,
     resolutionSetting: camera.resolutionSetting,
     maxResolution: camera.maxResolution,
-    softContrast: camera.softContrast,
+    // Only Logitech cameras have it.
+    softContrast: camera.softContrastAvailable ? camera.softContrast : undefined,
     controls: controlsState(),
     controlsChanged: cameraControls.changed,
     ...(cameraControls.lockedControls.length && cameraControls.lock

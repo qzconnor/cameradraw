@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import type { ElectronApplication, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { storeValue, toast, waitForLiveCamera } from './helpers/app'
+import { storeCall, storeValue, toast, waitForLiveCamera } from './helpers/app'
 
 /**
  * The settings in tabs, and what the camera itself adjusts. Chromium's fake camera offers exposure
@@ -19,8 +19,29 @@ const trackSettings = (page: Page): Promise<Record<string, unknown>> =>
       JSON.parse(JSON.stringify((v.srcObject as MediaStream).getVideoTracks()[0].getSettings()))
     )
 
-const savedControls = (profile: string): Record<string, unknown> | undefined =>
-  JSON.parse(readFileSync(join(profile, 'settings.json'), 'utf8')).cameraControls?.[CAMERA]
+const savedControls = (profile: string, camera = CAMERA): Record<string, unknown> | undefined =>
+  JSON.parse(readFileSync(join(profile, 'settings.json'), 'utf8')).cameraControls?.[camera]
+
+/**
+ * Gives the fake camera the label of a Logitech webcam (USB id 046d:…) and picks it again – the
+ * label is how CameraDraw tells the make. Returns the new label.
+ */
+async function pretendLogitech(page: Page): Promise<string> {
+  await page.evaluate(() => {
+    const list = MediaDevices.prototype.enumerateDevices
+    MediaDevices.prototype.enumerateDevices = async function () {
+      return (await list.call(this)).map((d) =>
+        d.kind === 'videoinput'
+          ? ({ ...d.toJSON(), label: `${d.label} (046d:085c)` } as MediaDeviceInfo)
+          : d
+      )
+    }
+  })
+  await storeCall(page, 'camera', 'refresh')
+  await storeCall(page, 'camera', 'select', await storeValue(page, 'camera', 'selectedId'))
+  await waitForLiveCamera(page)
+  return `${CAMERA} (046d:085c)`
+}
 
 /** Smallest and largest colour value in an image file. */
 const valueRange = (app: ElectronApplication, file: string): Promise<[number, number]> =>
@@ -125,20 +146,28 @@ test('a camera with more than Full HD can use its highest resolution', async ({
   expect(savedControls(workspace.profile)).toBeUndefined()
 })
 
-test('soft contrast shows and saves the picture in the range 16–235', async ({
+test('soft contrast of a Logitech camera shows and saves the picture in the range 16–235', async ({
   app,
   page,
   workspace
 }) => {
   await waitForLiveCamera(page)
   await page.getByRole('button', { name: 'Bildeinstellungen' }).click()
-  // The fake camera is no USB device – no anti-flicker filter to set.
+  // The fake camera is no USB device – no anti-flicker filter to set, and no Logitech camera.
   await expect(page.getByText('Flimmerfilter')).toBeHidden()
+  await expect(field(page, 'Belichtung')).toBeVisible()
   const soft = page.getByRole('switch', { name: 'Weicher Kontrast' })
+  await expect(soft).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  const camera = await pretendLogitech(page)
+  await page.getByRole('button', { name: 'Bildeinstellungen' }).click()
   await expect(soft).not.toBeChecked()
   await soft.click()
   await expect(page.locator('main video')).toHaveCSS('filter', /contrast\(0\.87/)
-  await expect.poll(() => savedControls(workspace.profile)).toMatchObject({ softContrast: true })
+  await expect
+    .poll(() => savedControls(workspace.profile, camera))
+    .toMatchObject({ softContrast: true })
 
   // Saved right away (burst), so the file shows what was captured.
   await page.keyboard.press('Escape')
@@ -160,7 +189,7 @@ test('soft contrast shows and saves the picture in the range 16–235', async ({
   await page.getByRole('button', { name: 'Bildeinstellungen' }).click()
   await soft.click()
   await expect(page.locator('main video')).toHaveCSS('filter', 'none')
-  await expect.poll(() => savedControls(workspace.profile)).toBeUndefined()
+  await expect.poll(() => savedControls(workspace.profile, camera)).toBeUndefined()
   await page.keyboard.press('Escape')
   await expect(toast(page, 'Bild gespeichert')).toBeHidden()
   // The fake picture has pure colours: back to the full range.
