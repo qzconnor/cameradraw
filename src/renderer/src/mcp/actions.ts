@@ -21,6 +21,7 @@ import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore, type ControlRange } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
 import { useFocusPeakingStore } from '@/stores/focus-peaking'
+import { useReferenceStore } from '@/stores/reference'
 import { useGalleryStore } from '@/stores/gallery'
 import { useMcpStore } from '@/stores/mcp'
 import { usePanelsStore } from '@/stores/panels'
@@ -116,6 +117,7 @@ function createActions(): Actions {
   const panels = usePanelsStore()
   const burst = useBurstStore()
   const peaking = useFocusPeakingStore()
+  const reference = useReferenceStore()
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -167,6 +169,13 @@ function createActions(): Actions {
     ...(peaking.best ? { best: Math.round(peaking.best * 100) / 100 } : {})
   })
 
+  const referenceState = (): Record<string, unknown> => ({
+    path: reference.path,
+    opacity: reference.opacity,
+    mode: reference.mode,
+    drawing: reference.drawing
+  })
+
   const cameraState = (): Record<string, unknown> => ({
     status: camera.status,
     paused: camera.paused,
@@ -188,7 +197,8 @@ function createActions(): Actions {
     zoomMode: camera.zoomMode,
     mirror: settings.mirror,
     burst: burstState(),
-    focusPeaking: peakingState()
+    focusPeaking: peakingState(),
+    reference: referenceState()
   })
 
   const settingsState = (): Record<string, unknown> => ({
@@ -577,6 +587,19 @@ function createActions(): Actions {
       if (color !== undefined) peaking.color = color.toLowerCase()
       if (enabled !== undefined) peaking.enabled = enabled
       return peakingState()
+    },
+
+    async setReference({ path, latest, opacity, mode, drawing }) {
+      if (opacity !== undefined) reference.opacity = opacity
+      if (mode !== undefined) reference.mode = mode
+      if (drawing !== undefined) reference.drawing = drawing
+      if (latest) await reference.showLatest()
+      else if (path === null) reference.hide()
+      else if (path !== undefined) {
+        await requireImage(path)
+        await reference.show(path)
+      }
+      return referenceState()
     },
 
     async setBurst({ enabled, project }) {

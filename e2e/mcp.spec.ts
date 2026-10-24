@@ -580,6 +580,25 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client lays a reference picture over the live picture', async ({ page }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    const shown = await call(client, 'set_reference', { latest: true, mode: 'difference' })
+    expect(shown).toMatchObject({ path: 'Probe.png', mode: 'difference', drawing: false })
+    await expect(page.locator('img[data-reference]')).toBeVisible()
+    expect((await call(client, 'get_state')).camera.reference.path).toBe('Probe.png')
+
+    expect(await callError(client, 'set_reference', { path: 'Fehlt.png' })).toContain('Fehlt.png')
+    await call(client, 'set_reference', { opacity: 0.8 })
+    await expect(page.locator('img[data-reference]')).toHaveCSS('opacity', '0.8')
+
+    expect(await call(client, 'set_reference', { path: null })).toMatchObject({ path: null })
+    await expect(page.locator('img[data-reference]')).toHaveCount(0)
+    await client.close()
+  })
+
   test('keys and mouse sent by a client reach the app', async ({ page }) => {
     await waitForLiveCamera(page)
     await waitForMcp(page)

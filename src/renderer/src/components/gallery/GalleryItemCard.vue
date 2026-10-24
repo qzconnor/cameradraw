@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue'
 import {
+  BlendIcon,
   CopyIcon,
   EllipsisIcon,
   FolderIcon,
@@ -66,6 +67,7 @@ const emit = defineEmits<{
   delete: []
   move: [project: string | null]
   moveToNew: []
+  reference: []
 }>()
 
 const drag = useGalleryDrag()
@@ -98,7 +100,8 @@ const mainActions: MenuAction[] = [
   { label: 'Bearbeiten', icon: PencilIcon, run: () => emit('open') },
   { label: 'Bild kopieren', icon: CopyIcon, run: () => emit('copy') },
   { label: 'Umbenennen', icon: TextCursorInputIcon, run: () => emit('rename'), shortcut: 'F2' },
-  { label: 'Im Ordner zeigen', icon: FolderSearchIcon, run: () => emit('reveal') }
+  { label: 'Im Ordner zeigen', icon: FolderSearchIcon, run: () => emit('reveal') },
+  { label: 'Als Referenz einblenden', icon: BlendIcon, run: () => emit('reference') }
 ]
 const deleteAction: MenuAction = {
   label: 'Löschen',

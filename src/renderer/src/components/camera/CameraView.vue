@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 // Left/right mirror icon (vertical centre line). Lucide's old `FlipHorizontal2` alias shows up/down.
 import {
+  BlendIcon,
   FocusIcon,
   ImagesIcon,
   SunMediumIcon,
@@ -31,12 +32,14 @@ import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
 import { useFocusPeakingStore } from '@/stores/focus-peaking'
+import { useReferenceStore } from '@/stores/reference'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
 import BurstBar from './BurstBar.vue'
 import CameraStatusOverlay from './CameraStatusOverlay.vue'
 import FocusPeaking from './FocusPeaking.vue'
 import FocusPeakingBar from './FocusPeakingBar.vue'
+import ReferenceBar from './ReferenceBar.vue'
 import PauseButton from './PauseButton.vue'
 import ShutterButton from './ShutterButton.vue'
 import ZoomControl from './ZoomControl.vue'
@@ -56,6 +59,7 @@ const editor = useEditorStore()
 const panels = usePanelsStore()
 const burst = useBurstStore()
 const peaking = useFocusPeakingStore()
+const reference = useReferenceStore()
 // Created with the camera view, so what the user set is applied whenever the camera starts.
 useCameraControlsStore()
 
@@ -63,6 +67,16 @@ useCameraControlsStore()
 const pictureSettingsOpen = computed(
   () => panels.isOpen('settings') && panels.settingsTab === 'picture'
 )
+
+/** Shows the newest picture as the reference – or hides the reference. */
+async function toggleReference(on: boolean): Promise<void> {
+  if (!on) return reference.hide()
+  try {
+    await reference.showLatest()
+  } catch (err) {
+    toast.error('Kein Referenzbild', { description: errorMessage(err) })
+  }
+}
 
 function togglePictureSettings(open: boolean): void {
   if (open) panels.openSettings('picture')
@@ -253,6 +267,19 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           class="size-full object-cover"
           :style="videoStyle"
         />
+        <!-- A picture taken before, over the live one: taken with the same mirroring and zoom, it
+             lines up with the viewport as it is. -->
+        <img
+          v-if="reference.url"
+          :src="reference.url"
+          alt=""
+          data-reference
+          class="pointer-events-none absolute inset-0 size-full object-contain"
+          :style="{
+            opacity: reference.opacity,
+            mixBlendMode: reference.mode === 'difference' ? 'difference' : undefined
+          }"
+        />
         <FocusPeaking
           :video="video"
           :picture="picture"
@@ -266,13 +293,14 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
     <CameraStatusOverlay />
 
     <!-- Modes and aids that are on, at the top like banners: burst capture with its counter and
-         target project, the focus aid with its meter. -->
+         target project, the focus aid with its meter, the reference picture. -->
     <div
-      v-if="playing && (burst.enabled || peaking.enabled)"
+      v-if="playing && (burst.enabled || peaking.enabled || reference.enabled)"
       class="pointer-events-none absolute inset-x-4 top-4 flex flex-col items-center gap-2"
     >
       <BurstBar v-if="burst.enabled" class="pointer-events-auto" />
       <FocusPeakingBar v-if="peaking.enabled" class="pointer-events-auto" />
+      <ReferenceBar v-if="reference.enabled" class="pointer-events-auto" />
     </div>
 
     <!-- Bottom controls on one line: zoom left, shutter centred, pause right next to it and mirror
@@ -308,6 +336,15 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           <HintTooltip label="Schärfehilfe – scharfe Kanten leuchten" side="top">
             <Toggle v-model="peaking.enabled" aria-label="Schärfehilfe">
               <FocusIcon />
+            </Toggle>
+          </HintTooltip>
+          <HintTooltip label="Referenzbild – ein Bild von vorher über dem Livebild" side="top">
+            <Toggle
+              :model-value="reference.enabled"
+              aria-label="Referenzbild"
+              @update:model-value="toggleReference"
+            >
+              <BlendIcon />
             </Toggle>
           </HintTooltip>
           <!-- data-panel-toggle: the settings panel would take the click as one outside of it. -->

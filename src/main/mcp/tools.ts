@@ -365,6 +365,19 @@ export function createMcpServer(): McpServer {
     (args) => remote('setFocusPeaking', args)
   )
   add(
+    'set_reference',
+    'A reference picture over the live view ("Referenzbild"): an image taken before lies over the camera picture, so the sample can be put back exactly where it was – e.g. for an "after" picture that matches the "before". path: an image of the library (null hides it), latest: the newest image (usually the one just taken). It shows the original camera frame, which lines up with the live picture (same camera, mirroring and zoom), or with drawing: true the image as saved with its drawing (markers show where to look). opacity 0.1–1; mode "blend" (see-through) or "difference" (what lines up turns black – compare with screenshot). Only shown, never part of a capture.',
+    z.object({
+      path: imagePath.nullable().optional(),
+      latest: z.boolean().optional(),
+      opacity: z.number().min(0.1).max(1).optional(),
+      mode: z.enum(['blend', 'difference']).optional(),
+      drawing: z.boolean().optional()
+    }),
+    CHANGES,
+    (args) => remote('setReference', args)
+  )
+  add(
     'set_burst',
     'Burst capture: while on, Space, the shutter and the photo button save each picture right away. Also sets the project the pictures go to (null = none).',
     z.object({ enabled: z.boolean().optional(), project: project.optional() }),

@@ -97,6 +97,12 @@ die auch später noch Form für Form bearbeitbar bleiben.
   nur scharfe Kanten, nicht einfach kontrastreiche. Oben zeigt ein Balken, wie scharf die Bildmitte
   im Vergleich zu den letzten Sekunden ist: am Fokus drehen, bis er voll und grün ist.
   Empfindlichkeit (wenig, mittel, viel) und Farbe lassen sich dort wählen.
+- **Referenzbild** – Der Knopf mit den zwei Kreisen legt das zuletzt aufgenommene Bild halb
+  durchsichtig über das Livebild: So liegt eine Probe für das „Nachher“-Bild wieder genau wie beim
+  „Vorher“. Ein anderes Bild kommt aus der Leiste oben (die neuesten) oder aus der Galerie
+  (Rechtsklick → „Als Referenz einblenden“). Mit „Differenz“ wird alles schwarz, was
+  übereinanderliegt – ideal zum genauen Ausrichten; „Zeichnung“ zeigt das Bild samt Markierungen.
+  Das Referenzbild wird nie mit aufgenommen.
 - **Weicher Kontrast** – Auf Wunsch zeigt und speichert CameraDraw das Bild einer Kamera wie Logi
   Capture im Bereich 16–235: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger.
 - **Einstellungen in Tabs** – Allgemein (Speicherordner, Ambient Light), Kamera (Gerät, Auflösung,
@@ -187,13 +193,13 @@ später in den Einstellungen ändern.
 
 **Galerie**
 
-| Taste / Geste           | Aktion                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| Bild auf Projekt ziehen | Bild in das Projekt verschieben (mit „Rückgängig“ im Hinweis)                        |
-| Bild in den Editor      | Bild als eigene Ebene in das Bild im Editor einfügen                                 |
-| `F2`                    | Bild oder Projekt umbenennen                                                         |
-| Rechtsklick / `…`       | Bearbeiten, Bild kopieren, Umbenennen, Verschieben nach …, Im Ordner zeigen, Löschen |
-| `Esc`                   | Ziehen abbrechen, Suche leeren, Galerie schließen                                    |
+| Taste / Geste           | Aktion                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Bild auf Projekt ziehen | Bild in das Projekt verschieben (mit „Rückgängig“ im Hinweis)                                                 |
+| Bild in den Editor      | Bild als eigene Ebene in das Bild im Editor einfügen                                                          |
+| `F2`                    | Bild oder Projekt umbenennen                                                                                  |
+| Rechtsklick / `…`       | Bearbeiten, Bild kopieren, Umbenennen, Im Ordner zeigen, Als Referenz einblenden, Verschieben nach …, Löschen |
+| `Esc`                   | Ziehen abbrechen, Suche leeren, Galerie schließen                                                             |
 
 ## Messen
 
