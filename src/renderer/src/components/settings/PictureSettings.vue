@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CameraOffIcon, LockIcon, RotateCcwIcon, SunMediumIcon } from '@lucide/vue'
+import { CameraOffIcon, RotateCcwIcon, SunMediumIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import CameraControlField from '@/components/camera/CameraControlField.vue'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { FieldDescription, FieldGroup, FieldSeparator } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
-import { CONTROL_LABELS } from '@/lib/camera-controls'
 import { errorMessage } from '@/lib/format'
 import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore } from '@/stores/camera-controls'
@@ -22,14 +21,6 @@ const controls = useCameraControlsStore()
 const autoControls = computed(() => controls.controls.filter((c) => c.kind === 'auto'))
 const valueControls = computed(() => controls.controls.filter((c) => c.kind === 'value'))
 const live = computed(() => camera.status === 'live')
-
-/** "Kontrast und Schärfe" – controls the camera lists but does not let set. */
-const refusedNote = computed(() => {
-  const names = controls.refused.map((n) => CONTROL_LABELS[n])
-  if (!names.length) return null
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} und ${names.at(-1)}` : names[0]
-  return `${list} lässt die Kamera nicht verstellen.`
-})
 
 async function reset(): Promise<void> {
   try {
@@ -72,12 +63,6 @@ async function reset(): Promise<void> {
         <EmptyDescription>Diese Kamera lässt keine Bildeinstellungen zu.</EmptyDescription>
       </EmptyHeader>
     </Empty>
-
-    <FieldDescription v-if="controls.lockedControls.length && controls.lock" class="flex gap-2">
-      <LockIcon class="mt-0.5 size-3.5 shrink-0" />
-      {{ controls.lock.reason }}
-    </FieldDescription>
-    <FieldDescription v-if="refusedNote">{{ refusedNote }}</FieldDescription>
 
     <div v-if="controls.controls.length">
       <Button variant="outline" size="sm" :disabled="!controls.changed" @click="reset">
