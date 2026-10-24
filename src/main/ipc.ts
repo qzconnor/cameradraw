@@ -1,4 +1,5 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { sanitizeControlSettings } from '@shared/camera-controls'
 import { isMcpTransport, isValidMcpPort } from '@shared/mcp'
 import { IPC, type AppSettings, type CameraScale, type SaveImageRequest } from '@shared/types'
 import { registerButtonIpc } from './buttons'
@@ -100,6 +101,8 @@ function sanitizePatch(patch: unknown): Partial<AppSettings> {
       ])
     )
   }
+  const controls = 'cameraControls' in p ? sanitizeControlSettings(p.cameraControls) : null
+  if (controls) out.cameraControls = controls
   return out
 }
 

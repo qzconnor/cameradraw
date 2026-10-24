@@ -63,3 +63,15 @@ export interface StillButtonEvent extends UsbDeviceId {
 export interface BrightnessEvent extends UsbDeviceId {
   value: number
 }
+
+/** Anti-flicker filter in Hz – the mains frequency of the lamps; 0 = off. */
+export type PowerLineFrequency = 0 | 50 | 60
+
+/** A camera's anti-flicker filter (UVC power line frequency), see `controls.powerLine`. */
+export interface PowerLineState {
+  value: PowerLineFrequency
+  /** What the camera accepts – many only 50 and 60, not off. */
+  options: PowerLineFrequency[]
+  /** The camera's own default (Logitech webcams: 60). */
+  default: PowerLineFrequency
+}

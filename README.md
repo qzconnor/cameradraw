@@ -79,7 +79,18 @@ die auch später noch Form für Form bearbeitbar bleiben.
   nach Zeitraum. Bilder lassen sich per Drag & Drop in Projekte ziehen, umbenennen (`F2`),
   verschieben und in den Papierkorb legen.
 - **Kamera** – unterscheidet echte von virtuellen Kameras (OBS, DroidCam, …), verbindet sich nach
-  dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital.
+  dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital. Kameras,
+  die mehr als Full HD können, nehmen auf Wunsch in ihrer höchsten Auflösung auf.
+- **Bildeinstellungen der Kamera** – Belichtung, Weißabgleich und Fokus (jeweils automatisch oder
+  von Hand), Helligkeit, Kontrast, Sättigung, Schärfe und der Flimmerfilter (50 oder 60 Hz, wie in
+  Logi Capture) – direkt an der Kamera, also im Livebild und in jeder Aufnahme. Der Knopf mit der
+  Sonne unten rechts im Livebild öffnet sie. Angezeigt wird nur, was die Kamera anbietet und auch
+  wirklich annimmt; CameraDraw merkt es sich pro Kamera und stellt es bei jedem Start wieder ein.
+  „Zurücksetzen“ holt die Werte von vorher zurück.
+- **Weicher Kontrast** – Auf Wunsch zeigt und speichert CameraDraw das Bild einer Kamera wie Logi
+  Capture im Bereich 16–235: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger.
+- **Einstellungen in Tabs** – Allgemein (Speicherordner, Ambient Light), Kamera (Gerät, Auflösung,
+  Spiegeln, Zoom), Bild (siehe oben) und KI (MCP-Server).
 - **Geräte-Module** – Gerätetypen bringen eigene Funktionen mit, z. B. Foto- und Zoom-Tasten des
   Generalplus-USB-Mikroskops.
 - **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
@@ -195,7 +206,7 @@ KI-Assistent die laufende App bedienen – alles passiert sichtbar im Fenster, s
 klicken: Kamera wählen und pausieren, Bild anhalten oder direkt speichern, Bilder in der Galerie
 suchen, öffnen, umbenennen und verschieben, im Editor zeichnen, messen, ändern und speichern.
 
-**Einschalten:** Einstellungen → **KI-Steuerung (MCP-Server)**. Unter **Verbindung** wählst du, wie
+**Einschalten:** Einstellungen → Tab **KI** → **KI-Steuerung (MCP-Server)**. Unter **Verbindung** wählst du, wie
 Clients sich verbinden; darunter stehen Status und die Einrichtung pro Client zum Kopieren:
 
 - **HTTP** – der Client verbindet sich mit einer Adresse auf diesem Rechner (Port änderbar): Claude
@@ -231,6 +242,13 @@ angefügten Fläche. `editor_state` liefert den Quelltext und die Größe des fo
 oder rechts aus – `at` ist dann die Mitte oder das rechte Ende der Oberkante; beides gibt es auch bei
 `editor_update` und `editor_set_tool`.
 
+Die Bildeinstellungen der Kamera stehen in `get_state` unter `camera.controls` – mit Wert, Bereich
+und Modus, so wie `set_camera` sie mit `controls` annimmt (z. B. `{ "exposureTime": 156.25 }` für
+1/64 s; ein Wert schaltet auf manuell, `"exposureMode": "continuous"` zurück auf automatisch).
+Der Flimmerfilter ist `powerLineFrequency` (50 oder 60 Hz, 0 = aus, wenn die Kamera das kann).
+`resetControls: true` stellt die Werte von vorher wieder her, `resolution: "max"` wählt die höchste
+Auflösung der Kamera, `softContrast: true` schaltet den weichen Kontrast ein.
+
 Ein Assistent zeichnet in eigene Ebenen (in der Liste mit Roboter-Symbol), nicht in die des
 Benutzers: `editor_draw` ohne `layer` nimmt die zuletzt benutzte eigene, beim ersten Mal eine neue
 mit dem Namen des Clients. Mit `editor_layers` legt er beliebig viele an (`add`, z. B. „Messungen“
@@ -246,8 +264,8 @@ Einstellungen. Dort steht auch, ob der Server läuft und welcher Client zuletzt 
 
 | Bereich   | Tools                                                                                                                                                                                                                                                                                                                                                                                        |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Überblick | `get_state`, `screenshot`, `show_panel`, `update_settings`, `list_fonts`                                                                                                                                                                                                                                                                                                                     |
-| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom), `capture`, `set_burst`                                                                                                                                                                                                                                                                                                          |
+| Überblick | `get_state`, `screenshot`, `show_panel` (auch ein Tab der Einstellungen), `update_settings`, `list_fonts`                                                                                                                                                                                                                                                                                    |
+| Kamera    | `list_cameras`, `select_camera`, `set_camera` (Pause, Zoom, Auflösung, Bildeinstellungen), `capture`, `set_burst`                                                                                                                                                                                                                                                                            |
 | Galerie   | `list_library`, `get_image`, `open_image`, Bilder und Projekte anlegen, umbenennen, verschieben, löschen, `copy_image`                                                                                                                                                                                                                                                                       |
 | Editor    | `editor_state`, `editor_image`, `editor_draw`, `editor_layers`, `editor_insert_image`, `editor_select`, `editor_update`, `editor_delete`, `editor_arrange`, `editor_clipboard`, `editor_history`, `editor_set_tool`, `editor_set_view`, `editor_set_scale`, `editor_rotate`, `editor_perspective`, `editor_extend`, `editor_reset_image`, `editor_save`, `editor_copy_image`, `editor_close` |
 | Eingaben  | `press_key`, `click`, `drag`, `type_text` – wie Tastatur und Maus, z. B. für Dialoge                                                                                                                                                                                                                                                                                                         |
@@ -377,7 +395,8 @@ Editor, Speichern, Messen, Zoom, Fenster, Updates) und laufen bei jedem Pull Req
 
 ```
 src/
-  shared/            Typen, IPC-Kanäle und Namensregeln (names.ts) für Main, Preload und Renderer
+  shared/            Typen, IPC-Kanäle, Namensregeln (names.ts) und Bildeinstellungen der Kamera
+                     (camera-controls.ts) für Main, Preload und Renderer
   main/              settings.ts (JSON in userData), library.ts (Bilder und Projekte im
                      Speicherordner), protocol.ts (cdraw:// für Bilder/Thumbnails), cameras.ts
                      (Windows-Geräteverwaltung: echte vs. virtuelle Kameras), buttons.ts (Dienst),
@@ -386,7 +405,8 @@ src/
                      zur Oberfläche), ipc.ts
   preload/           window.api (contextBridge, sandboxed)
   renderer/src/
-    stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom), gallery (Projekte,
+    stores/          Pinia: settings, camera (Verbindung/Reconnect/Zoom/Auflösung),
+                     camera-controls (Bildeinstellungen der Kamera), gallery (Projekte,
                      Suche, Sortierung), editor, burst (Serienaufnahme), updates, panels,
                      hardware, modules, mcp
     composables/     useDrawingCanvas (fabric.js-Canvas, Ebenen, Werkzeuge, Undo/Redo, Export),
@@ -459,13 +479,38 @@ den Wert genauso oft über `IOCTL_KS_PROPERTY` am Kameratreiber und zoomt dann d
 `cameradraw-buttons.exe brightness 1b3f:2002` als normaler Benutzer, ohne Dienst und ohne USBPcap
 (`src/main/controls.ts`, ein Prozess pro Gerät, endet mit der App). Chromium hilft hier nicht:
 `getSettings().brightness` liefert nur einen zwischengespeicherten Wert. Die Helligkeit darf nie
-gesetzt werden.
+gesetzt werden – das Modul sperrt sie deshalb auch in den Bildeinstellungen (`lockedControls`). Den
+Kontrast meldet das Mikroskop, nimmt ihn aber nicht an (auch nicht den aktuellen Wert); CameraDraw
+probiert das beim ersten Start der Kamera aus und blendet ihn dann aus.
 
 Das Foto-Signal verarbeitet der Windows-Kameratreiber (`usbvideo.sys`) selbst: Das Mikroskop meldet
 Standbild-Methode 2, also macht der Treiber aus dem Druck eine eigene Standbild-Aufnahme. Das
 Ereignis `KSEVENT_VIDCAPTOSTI_EXT_TRIGGER` lässt sich zwar ohne Admin-Rechte abonnieren, wird aber
 nie ausgelöst (getestet, auch während CameraDraw streamt). Media Foundation, WinRT und DirectShow
 geben die Taste an ein zweites Programm ebenfalls nicht weiter.
+
+</details>
+
+<details>
+<summary><b>Weicher Kontrast und Flimmerfilter (wie Logi Capture)</b></summary>
+
+<br />
+
+Logi Capture (`C:\Program Files\Logitech\LogiCapture`) baut auf der XSplit-Engine auf; seine
+Oberfläche ist JavaScript in `build/index.html`. Beim Einbinden einer Kamera setzt es MJPG
+1920×1080 mit 30 fps, `videoPowerlineFrequency` (50 Hz, außer in der Region „WorldWide“),
+`camAutoExposurePriority` und `videoBacklightCompensation` (sein „HDR“) und lässt Belichtung,
+Weißabgleich und Fokus automatisch – nachgeschärft oder entrauscht wird nichts.
+
+Dass sein Bild ruhiger wirkt, liegt an der Darstellung: Zwei gleichzeitige Screenshots, Pixel für
+Pixel verglichen, ergeben für alle drei Kanäle `Logi = 0,84 · CameraDraw + 16` – der Bereich 0–255
+wird auf 16–235 gestaucht. Chromium rechnet das MJPEG der Webcam korrekt um (BT.601, voller
+Bereich). „Weicher Kontrast“ macht dasselbe wie Logi Capture, im Livebild als CSS-Filter und in der
+Aufnahme mit `ctx.filter` (`SOFT_CONTRAST` in `src/renderer/src/lib/capture.ts`).
+
+Logitech-Webcams wie die c922 starten mit 60 Hz; unter 50-Hz-Licht flackert dann das Bild. Logi
+Capture stellt sie bei jedem Start um, das hält bis zum nächsten Abstecken. CameraDraw setzt den
+gewählten Flimmerfilter ebenfalls bei jedem Start der Kamera.
 
 </details>
 
@@ -505,5 +550,8 @@ Benutzer beschreibbaren App-Ordner startet. Danach startet der Dienst automatisc
 - `cameradraw-buttons devices` listet die USB-Geräte je USBPcap-Hub (ohne Admin-Rechte).
 - `cameradraw-buttons parse <datei.pcap>` sucht Tastenpakete in einer Aufzeichnung (ohne
   Admin-Rechte).
+- `cameradraw-buttons powerline <vid:pid> [0|1|2]` liest bzw. setzt den Flimmerfilter (UVC
+  Power Line Frequency: aus, 50 Hz, 60 Hz) und gibt ihn als JSON aus – ohne Dienst und ohne
+  Admin-Rechte. Die App nutzt das für den Flimmerfilter im Bild-Tab; Browser bieten dafür nichts.
 
 </details>

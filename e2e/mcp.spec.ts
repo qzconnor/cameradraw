@@ -32,6 +32,7 @@ test.describe('switched off', () => {
     expect(await mcpState(page)).toBe('off')
     await expect(connect()).rejects.toThrow()
     await page.getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    await page.getByRole('tab', { name: 'KI' }).click()
     await page.getByText('KI-Steuerung (MCP-Server)').click()
     await expect(page.getByText('MCP-Server läuft')).toBeVisible()
     await expect(page.getByText('Noch kein Client verbunden.')).toBeVisible()
@@ -465,6 +466,59 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client adjusts the camera picture and its resolution', async ({ page, workspace }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    // The fake camera offers exposure and focus (10–100, steps of 5, manual) and up to 4K.
+    const { camera } = await call(client, 'get_state')
+    expect(camera).toMatchObject({
+      resolution: { width: 1920, height: 1080 },
+      resolutionSetting: 'standard',
+      maxResolution: { width: 3840, height: 2160 },
+      controlsChanged: false,
+      controls: {
+        exposureMode: { value: 'manual', options: ['continuous', 'manual'] },
+        exposureTime: { value: 50, min: 10, max: 100, step: 5, unit: '100 µs' },
+        focusDistance: { value: 50, min: 10, max: 100 }
+      }
+    })
+    expect(camera.controls.brightness).toBeUndefined()
+
+    const set = await call(client, 'set_camera', { controls: { exposureTime: 30 } })
+    expect(set.controls.exposureTime.value).toBe(30)
+    expect(set.controlsChanged).toBe(true)
+    expect(await callError(client, 'set_camera', { controls: { brightness: 10 } })).toContain(
+      'Diese Kamera lässt „Helligkeit“ nicht einstellen.'
+    )
+
+    const reset = await call(client, 'set_camera', { resetControls: true })
+    expect(reset.controls.exposureTime.value).toBe(50)
+    expect(reset.controlsChanged).toBe(false)
+
+    expect(camera.controls.powerLineFrequency).toBeUndefined() // no USB camera
+    const soft = await call(client, 'set_camera', { softContrast: true })
+    expect(soft.softContrast).toBe(true)
+    await expect(page.locator('main video')).toHaveCSS('filter', /contrast/)
+
+    const max = await call(client, 'set_camera', { resolution: 'max' })
+    expect(max.resolutionSetting).toBe('max')
+    await expect
+      .poll(() => storeValue(page, 'camera', 'resolution'))
+      .toEqual({ width: 3840, height: 2160 })
+    const saved = JSON.parse(readFileSync(join(workspace.profile, 'settings.json'), 'utf8'))
+    expect(saved.cameraControls.fake_device_0).toMatchObject({ resolution: 'max' })
+
+    // The picture settings in the settings panel.
+    await call(client, 'show_panel', { panel: 'settings', tab: 'picture' })
+    await expect(page.getByRole('tab', { name: 'Bild' })).toHaveAttribute('data-state', 'active')
+    expect(await callError(client, 'show_panel', { panel: 'gallery', tab: 'ai' })).toContain(
+      'Tabs gibt es nur in den Einstellungen.'
+    )
+    await client.close()
+  })
+
   test('keys and mouse sent by a client reach the app', async ({ page }) => {
     await waitForLiveCamera(page)
     await waitForMcp(page)
@@ -540,6 +594,7 @@ test.describe('stdio', () => {
 
     // The entry for Claude Desktop, as the settings show it: just the executable with --mcp.
     await page.getByRole('button', { name: 'Einstellungen', exact: true }).click()
+    await page.getByRole('tab', { name: 'KI' }).click()
     await expect(page.getByText('stdio · cameradraw --mcp')).toBeVisible()
     await expect(page.getByRole('tab', { name: 'Claude Desktop' })).toHaveAttribute(
       'data-state',
@@ -594,6 +649,7 @@ test.describe('port taken', () => {
       const { page } = await launch()
       await expect.poll(() => mcpState(page)).toBe('error')
       await page.getByRole('button', { name: 'Einstellungen', exact: true }).click()
+      await page.getByRole('tab', { name: 'KI' }).click()
       await expect(page.getByText('MCP-Server läuft nicht', { exact: true })).toBeVisible()
       await expect(
         page.getByText(`Port ${MCP_PORT} wird schon von einem anderen Programm verwendet.`)

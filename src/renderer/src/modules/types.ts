@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import type { CameraControlName } from '@shared/camera-controls'
 import type { UsbId } from '@/lib/camera-info'
 
 /**
@@ -46,6 +47,12 @@ export interface DeviceModule {
   /** Cameras this module is assigned to automatically. */
   match: UsbId[]
   capabilities: ModuleCapability[]
+  /**
+   * Picture controls CameraDraw never sets on this device, e.g. because it reports buttons through
+   * them – with the reason shown in the settings. Applies whenever the camera is recognised as this
+   * device, also with the module switched off.
+   */
+  lockedControls?: { controls: CameraControlName[]; reason: string }
   /**
    * Runs while the module is active for the live camera and the camera is not paused (e.g.
    * listening to device buttons). Returns a cleanup function.

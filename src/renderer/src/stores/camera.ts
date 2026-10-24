@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { createEventHook } from '@vueuse/core'
+import type { CameraResolution } from '@shared/camera-controls'
 import { useSettingsStore } from './settings'
 
 export interface CameraDevice {
@@ -33,13 +34,25 @@ const ZOOM_STEP = 0.5
 type ZoomRange = { min: number; max: number; step: number }
 type WithZoom<T> = T & { zoom?: ZoomRange }
 
-const VIDEO_CONSTRAINTS = {
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
-  frameRate: { ideal: 30 },
-  // Ask for zoom control too – cameras without it are opened normally.
-  zoom: true
-} as MediaTrackConstraints
+/** Resolution `standard`: up to Full HD at 30 frames per second. */
+const STANDARD_SIZE = { width: 1920, height: 1080 }
+
+const VIDEO_CONSTRAINTS: Record<CameraResolution, MediaTrackConstraints> = {
+  standard: {
+    width: { ideal: STANDARD_SIZE.width },
+    height: { ideal: STANDARD_SIZE.height },
+    frameRate: { ideal: 30 },
+    // Ask for zoom control too – cameras without it are opened normally.
+    zoom: true
+  } as MediaTrackConstraints,
+  // A size beyond every camera picks its largest picture. No frame rate wish: it would favour a
+  // smaller picture with more frames per second.
+  max: {
+    width: { ideal: 100_000 },
+    height: { ideal: 100_000 },
+    zoom: true
+  } as MediaTrackConstraints
+}
 
 export const useCameraStore = defineStore('camera', () => {
   const settings = useSettingsStore()
@@ -50,6 +63,8 @@ export const useCameraStore = defineStore('camera', () => {
   const status = ref<CameraStatus>('idle')
   const stream = shallowRef<MediaStream | null>(null)
   const resolution = ref<{ width: number; height: number } | null>(null)
+  /** Largest picture the live camera offers. */
+  const maxResolution = ref<{ width: number; height: number } | null>(null)
   /** Manual reload of the camera list is running. */
   const refreshing = ref(false)
   /** Zoom control of the camera itself, null → digital zoom. */
@@ -92,6 +107,21 @@ export const useCameraStore = defineStore('camera', () => {
     return zoomMode.value === 'camera' && range && range.min > 0
       ? range.max / range.min
       : DIGITAL_MAX_ZOOM
+  })
+  /** Resolution chosen for this camera. */
+  const resolutionSetting = computed<CameraResolution>(() =>
+    selectedLabel.value && settings.cameraControls[selectedLabel.value]?.resolution === 'max'
+      ? 'max'
+      : 'standard'
+  )
+  /** "Weicher Kontrast" is on for this camera: picture and captures in the TV range 16–235. */
+  const softContrast = computed(
+    () => !!selectedLabel.value && !!settings.cameraControls[selectedLabel.value]?.softContrast
+  )
+  /** The camera offers more than Full HD – only then there is a resolution to choose. */
+  const offersMoreThanStandard = computed(() => {
+    const max = maxResolution.value
+    return !!max && (max.width > STANDARD_SIZE.width || max.height > STANDARD_SIZE.height)
   })
 
   // ── Device list ─────────────────────────────────────────────────────────────
@@ -137,6 +167,7 @@ export const useCameraStore = defineStore('camera', () => {
     stream.value?.getTracks().forEach((t) => t.stop())
     stream.value = null
     resolution.value = null
+    maxResolution.value = null
   }
 
   // ── Zoom ────────────────────────────────────────────────────────────────────
@@ -214,7 +245,7 @@ export const useCameraStore = defineStore('camera', () => {
     try {
       const s = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { ...VIDEO_CONSTRAINTS, deviceId: { exact: deviceId } }
+        video: { ...VIDEO_CONSTRAINTS[resolutionSetting.value], deviceId: { exact: deviceId } }
       })
       if (token !== startToken) {
         s.getTracks().forEach((t) => t.stop())
@@ -227,7 +258,11 @@ export const useCameraStore = defineStore('camera', () => {
       })
       const { width, height } = track.getSettings()
       resolution.value = width && height ? { width, height } : null
-      const range = (track.getCapabilities?.() as WithZoom<MediaTrackCapabilities>).zoom
+      const capabilities = (track.getCapabilities?.() ?? {}) as WithZoom<MediaTrackCapabilities>
+      const maxWidth = capabilities.width?.max
+      const maxHeight = capabilities.height?.max
+      maxResolution.value = maxWidth && maxHeight ? { width: maxWidth, height: maxHeight } : null
+      const range = capabilities.zoom
       zoomRange.value = range && range.max > range.min ? range : null
       stream.value = s
       status.value = 'live'
@@ -306,6 +341,31 @@ export const useCameraStore = defineStore('camera', () => {
     await start(device.id)
   }
 
+  /** Remembers the resolution for the chosen camera and reopens it with that resolution. */
+  async function setResolution(value: CameraResolution): Promise<void> {
+    const label = selectedLabel.value
+    if (!label || value === resolutionSetting.value) return
+    await settings.updateCameraControls(label, (entry) => {
+      const next = { ...entry }
+      if (value === 'max') next.resolution = 'max'
+      else delete next.resolution
+      return next
+    })
+    if (status.value === 'live' && selectedId.value) await start(selectedId.value)
+  }
+
+  /** Switches "Weicher Kontrast" for the chosen camera – it applies right away, no restart. */
+  async function setSoftContrast(on: boolean): Promise<void> {
+    const label = selectedLabel.value
+    if (!label) throw new Error('Es ist keine Kamera gewählt.')
+    await settings.updateCameraControls(label, (entry) => {
+      const next = { ...entry }
+      if (on) next.softContrast = true
+      else delete next.softContrast
+      return next
+    })
+  }
+
   async function init(): Promise<void> {
     if (initialized) return
     initialized = true
@@ -378,6 +438,10 @@ export const useCameraStore = defineStore('camera', () => {
     status,
     stream,
     resolution,
+    maxResolution,
+    resolutionSetting,
+    offersMoreThanStandard,
+    softContrast,
     refreshing,
     paused,
     minimized,
@@ -387,6 +451,8 @@ export const useCameraStore = defineStore('camera', () => {
     maxZoom,
     init,
     select,
+    setResolution,
+    setSoftContrast,
     refresh,
     setZoom,
     stepZoom,

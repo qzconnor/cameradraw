@@ -2,14 +2,14 @@
 import { computed, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 // Left/right mirror icon (vertical centre line). Lucide's old `FlipHorizontal2` alias shows up/down.
-import { ImagesIcon, TrianglesCenterlineDashedVerticalIcon } from '@lucide/vue'
+import { ImagesIcon, SunMediumIcon, TrianglesCenterlineDashedVerticalIcon } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import type { CaptureInfo, GalleryItem } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
 import HintTooltip from '@/components/common/HintTooltip.vue'
 import { Toggle } from '@/components/ui/toggle'
 import { useVideoPicture } from '@/composables/useVideoPicture'
-import { captureFrame, type CapturedFrame } from '@/lib/capture'
+import { SOFT_CONTRAST, captureFrame, type CapturedFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import { canvasToBytes } from '@/lib/image'
 import { provideRemote } from '@/mcp/remote'
@@ -22,6 +22,7 @@ import {
 } from '@/lib/keyboard'
 import { useBurstStore } from '@/stores/burst'
 import { useCameraStore } from '@/stores/camera'
+import { useCameraControlsStore } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
@@ -45,6 +46,18 @@ const settings = useSettingsStore()
 const editor = useEditorStore()
 const panels = usePanelsStore()
 const burst = useBurstStore()
+// Created with the camera view, so what the user set is applied whenever the camera starts.
+useCameraControlsStore()
+
+/** The settings panel shows the camera's picture controls. */
+const pictureSettingsOpen = computed(
+  () => panels.isOpen('settings') && panels.settingsTab === 'picture'
+)
+
+function togglePictureSettings(open: boolean): void {
+  if (open) panels.openSettings('picture')
+  else panels.setOpen('settings', false)
+}
 
 const video = ref<HTMLVideoElement | null>(null)
 const viewport = ref<HTMLElement | null>(null)
@@ -68,7 +81,8 @@ const viewportStyle = computed(() => ({
   width: `min(100cqw, calc(100cqh * ${aspect.value}))`
 }))
 const videoStyle = computed(() => ({
-  transform: `scale(${settings.mirror ? -digitalZoom.value : digitalZoom.value}, ${digitalZoom.value})`
+  transform: `scale(${settings.mirror ? -digitalZoom.value : digitalZoom.value}, ${digitalZoom.value})`,
+  filter: camera.softContrast ? SOFT_CONTRAST : undefined
 }))
 
 watch(
@@ -101,7 +115,13 @@ async function capture(direct = burst.enabled): Promise<GalleryItem | null> {
   if (!canCapture.value || !video.value) return null
   let frame: CapturedFrame
   try {
-    frame = captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
+    frame = captureFrame(
+      video.value,
+      settings.mirror,
+      digitalZoom.value,
+      picture.value,
+      camera.softContrast ? SOFT_CONTRAST : undefined
+    )
   } catch (err) {
     toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
     throw err
@@ -260,6 +280,17 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           <HintTooltip label="Serienaufnahme – jedes Bild sofort speichern" side="top">
             <Toggle v-model="burst.enabled" aria-label="Serienaufnahme">
               <ImagesIcon />
+            </Toggle>
+          </HintTooltip>
+          <!-- data-panel-toggle: the settings panel would take the click as one outside of it. -->
+          <HintTooltip label="Bildeinstellungen der Kamera" side="top">
+            <Toggle
+              :model-value="pictureSettingsOpen"
+              aria-label="Bildeinstellungen"
+              data-panel-toggle="settings"
+              @update:model-value="togglePictureSettings"
+            >
+              <SunMediumIcon />
             </Toggle>
           </HintTooltip>
           <HintTooltip label="Bild spiegeln" side="top">

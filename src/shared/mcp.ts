@@ -4,6 +4,7 @@
  * on screen – camera, gallery, editor – is done by the renderer, so the user watches it live.
  */
 
+import type { CameraControlValues, CameraResolution } from './camera-controls'
 import type { AppSettings } from './types'
 
 export const DEFAULT_MCP_PORT = 3729
@@ -117,6 +118,9 @@ export type RemoteShape = RemoteStyle &
 
 export type RemotePanel = 'gallery' | 'settings' | 'modules' | 'updates' | 'none'
 
+/** Tabs of the settings panel. */
+export type RemoteSettingsTab = 'general' | 'camera' | 'picture' | 'ai'
+
 /**
  * What `editorLayers` does: `add` a drawing layer of the assistant's own, `use` a drawing layer for
  * the next drawings, change (`update`), `move`, `duplicate`, `copy`, `paste` or `delete` one.
@@ -138,10 +142,22 @@ export interface RemoteActionArgs {
   listCameras: { refresh?: boolean }
   listFonts: { query?: string }
   selectCamera: { id?: string; label?: string }
-  setCamera: { paused?: boolean; zoom?: number }
+  setCamera: {
+    paused?: boolean
+    zoom?: number
+    resolution?: CameraResolution
+    softContrast?: boolean
+    controls?: CameraControlValues
+    resetControls?: boolean
+  }
   capture: { mode?: 'edit' | 'save' }
   setBurst: { enabled?: boolean; project?: string | null }
-  showPanel: { panel: RemotePanel; project?: string | null; query?: string }
+  showPanel: {
+    panel: RemotePanel
+    project?: string | null
+    query?: string
+    tab?: RemoteSettingsTab
+  }
   listLibrary: { project?: string | null; query?: string; limit?: number }
   openImage: { path: string; discard?: boolean }
   createProject: { name: string }

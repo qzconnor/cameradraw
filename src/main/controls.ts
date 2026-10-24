@@ -1,7 +1,12 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { execFile, spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { app, BrowserWindow, ipcMain } from 'electron'
-import type { BrightnessEvent, UsbDeviceId } from '@shared/devices'
+import type {
+  BrightnessEvent,
+  PowerLineFrequency,
+  PowerLineState,
+  UsbDeviceId
+} from '@shared/devices'
 import { IPC } from '@shared/types'
 import { sanitizeDevices, serviceExecutable } from './buttons'
 
@@ -98,7 +103,62 @@ function watchBrightness(devices: UsbDeviceId[]): void {
   }
 }
 
+// ── Anti-flicker filter ─────────────────────────────────────────────────────────
+
+/** UVC power line frequency code ↔ Hz (0 = off). */
+const POWER_LINE_HZ: PowerLineFrequency[] = [0, 50, 60]
+
+const isPowerLineFrequency = (v: unknown): v is PowerLineFrequency =>
+  POWER_LINE_HZ.includes(v as PowerLineFrequency)
+
+/**
+ * Reads a camera's anti-flicker filter with `cameradraw-buttons.exe powerline` – after setting it,
+ * if `value` is given. Browsers offer no control for it. null: no such camera, no filter, or no
+ * helper (e.g. on other platforms).
+ */
+function powerLine(
+  device: UsbDeviceId,
+  value?: PowerLineFrequency
+): Promise<PowerLineState | null> {
+  const exe = serviceExecutable()
+  if (!supported || !existsSync(exe)) return Promise.resolve(null)
+  const args = ['powerline', keyOf(device)]
+  if (value !== undefined) args.push(String(POWER_LINE_HZ.indexOf(value)))
+  return new Promise((resolve, reject) => {
+    execFile(exe, args, { windowsHide: true, timeout: 5000 }, (_err, stdout) => {
+      let data: Record<string, unknown>
+      try {
+        data = JSON.parse(String(stdout).trim())
+      } catch {
+        return resolve(null)
+      }
+      if (data.error === 'rejected') {
+        return reject(new Error('Die Kamera hat den Flimmerfilter nicht übernommen.'))
+      }
+      const { min, max } = data
+      const code = (n: unknown): PowerLineFrequency | undefined => POWER_LINE_HZ[n as number]
+      const current = code(data.value)
+      if (current === undefined || typeof min !== 'number' || typeof max !== 'number') {
+        return resolve(null)
+      }
+      resolve({
+        value: current,
+        options: POWER_LINE_HZ.filter((_, i) => i >= min && i <= max),
+        default: code(data.default) ?? current
+      })
+    })
+  })
+}
+
 export function registerControlsIpc(): void {
+  ipcMain.handle(IPC.controlsPowerLine, (_e, camera: unknown, value: unknown) => {
+    const [device] = sanitizeDevices([camera])
+    if (!device) throw new Error('Unbekannte Kamera.')
+    if (value !== undefined && !isPowerLineFrequency(value)) {
+      throw new Error('Der Flimmerfilter kennt nur 0 (aus), 50 und 60 Hz.')
+    }
+    return powerLine(device, value)
+  })
   ipcMain.on(IPC.controlsWatchBrightness, (_e, devices: unknown) => {
     if (supported) watchBrightness(sanitizeDevices(devices))
   })

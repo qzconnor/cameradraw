@@ -1,6 +1,8 @@
 import type {
   BrightnessEvent,
   ButtonServiceStatus,
+  PowerLineFrequency,
+  PowerLineState,
   StillButtonEvent,
   SystemCamera,
   UsbDeviceId
@@ -80,6 +82,11 @@ export interface CameraDrawApi {
     /** Devices whose UVC brightness should be read; replaces the previous list. */
     watchBrightness(devices: UsbDeviceId[]): void
     onBrightness(callback: (event: BrightnessEvent) => void): () => void
+    /**
+     * Reads a camera's anti-flicker filter – after setting it to `value`, if given. null if the
+     * camera has none (or the helper is missing); throws if the camera refuses the value.
+     */
+    powerLine(device: UsbDeviceId, value?: PowerLineFrequency): Promise<PowerLineState | null>
   }
   /** App updates from the GitHub releases (only in the installed app) and their notes. */
   updates: {

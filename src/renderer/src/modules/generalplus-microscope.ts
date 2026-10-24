@@ -43,6 +43,11 @@ export const generalplusMicroscope: DeviceModule = {
         'Zoomt in CameraDraw wie die Tasten + / −. Das Mikroskop meldet die Tasten über seinen Helligkeitswert, den CameraDraw laufend abfragt – ohne Hintergrunddienst.'
     }
   ],
+  lockedControls: {
+    controls: ['brightness'],
+    reason:
+      'Die Helligkeit stellt CameraDraw bei diesem Mikroskop nicht ein – es meldet darüber seine Zoom-Tasten.'
+  },
   activate: ({ onPhotoButton, onBrightness, capture, zoom }) => {
     const stopPhoto = onPhotoButton((pressed) => {
       if (pressed) capture()

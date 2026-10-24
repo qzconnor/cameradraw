@@ -16,6 +16,7 @@ const DEFAULTS: AppSettings = {
   disabledModules: [],
   cameraModules: {},
   cameraScales: {},
+  cameraControls: {},
   mcpEnabled: false,
   mcpTransport: 'http',
   mcpPort: DEFAULT_MCP_PORT
