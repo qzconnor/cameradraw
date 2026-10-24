@@ -146,6 +146,7 @@ export interface RemoteActionArgs {
     paused?: boolean
     zoom?: number
     resolution?: CameraResolution
+    softContrast?: boolean
     controls?: CameraControlValues
     resetControls?: boolean
   }

@@ -1,3 +1,12 @@
+/**
+ * "Weicher Kontrast": the picture squeezed into the TV range 16–235 (out = 16 + in · 219/255), the
+ * way Logi Capture shows a webcam – measured from its output. Highlights no longer burn out and
+ * colours and colour casts get calmer. Written as CSS filter functions so the live view (`filter`)
+ * and captures (`ctx.filter`) do exactly the same: contrast(c) then brightness(k) gives
+ * k·c·x + k·(1 − c)/2, with k·c = 219/255 and k·(1 − c)/2 = 16/255.
+ */
+export const SOFT_CONTRAST = 'contrast(0.872509) brightness(0.984315)'
+
 export interface CapturedFrame {
   /** The picture in full resolution, ready to be encoded (e.g. with `canvasToBytes`). */
   canvas: HTMLCanvasElement
@@ -13,13 +22,14 @@ export interface CapturedFrame {
  * With digital zoom only the visible centre is kept and scaled back up to full resolution
  * (like a phone camera), so the saved image matches what was on screen.
  * `picture` is the size of the actual picture inside the frame: black bars baked in around it
- * (centred) are cut off.
+ * (centred) are cut off. `filter` (CSS filter functions) is applied like on the live view.
  */
 export function captureFrame(
   video: HTMLVideoElement,
   mirror: boolean,
   digitalZoom = 1,
-  picture?: { width: number; height: number } | null
+  picture?: { width: number; height: number } | null,
+  filter?: string
 ): CapturedFrame {
   const { videoWidth, videoHeight } = video
   if (!videoWidth || !videoHeight) throw new Error('Kein Kamerabild verfügbar')
@@ -35,6 +45,7 @@ export function captureFrame(
   canvas.height = height
   const ctx = canvas.getContext('2d')!
   ctx.imageSmoothingQuality = 'high'
+  if (filter) ctx.filter = filter
   if (mirror) {
     ctx.translate(width, 0)
     ctx.scale(-1, 1)

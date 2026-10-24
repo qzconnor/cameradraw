@@ -64,7 +64,8 @@ const api: CameraDrawApi = {
         callback(event)
       ipcRenderer.on(IPC.controlsBrightness, listener)
       return () => ipcRenderer.removeListener(IPC.controlsBrightness, listener)
-    }
+    },
+    powerLine: (device, value) => ipcRenderer.invoke(IPC.controlsPowerLine, device, value)
   },
   updates: {
     state: () => ipcRenderer.invoke(IPC.updatesState),

@@ -1,8 +1,8 @@
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import type { Page } from '@playwright/test'
+import type { ElectronApplication, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { storeValue, waitForLiveCamera } from './helpers/app'
+import { storeValue, toast, waitForLiveCamera } from './helpers/app'
 
 /**
  * The settings in tabs, and what the camera itself adjusts. Chromium's fake camera offers exposure
@@ -21,6 +21,20 @@ const trackSettings = (page: Page): Promise<Record<string, unknown>> =>
 
 const savedControls = (profile: string): Record<string, unknown> | undefined =>
   JSON.parse(readFileSync(join(profile, 'settings.json'), 'utf8')).cameraControls?.[CAMERA]
+
+/** Smallest and largest colour value in an image file. */
+const valueRange = (app: ElectronApplication, file: string): Promise<[number, number]> =>
+  app.evaluate(({ nativeImage }, file) => {
+    const pixels = nativeImage.createFromPath(file).toBitmap()
+    let min = 255
+    let max = 0
+    pixels.forEach((value, i) => {
+      if (i % 4 === 3) return // alpha
+      min = Math.min(min, value)
+      max = Math.max(max, value)
+    })
+    return [min, max] as [number, number]
+  }, file)
 
 const field = (page: Page, label: string): ReturnType<Page['locator']> =>
   page.locator('[data-slot=field]').filter({ has: page.getByText(label, { exact: true }) })
@@ -109,4 +123,47 @@ test('a camera with more than Full HD can use its highest resolution', async ({
   await waitForLiveCamera(page)
   await expect(badge.getByText('1920×1080')).toBeVisible()
   expect(savedControls(workspace.profile)).toBeUndefined()
+})
+
+test('soft contrast shows and saves the picture in the range 16–235', async ({
+  app,
+  page,
+  workspace
+}) => {
+  await waitForLiveCamera(page)
+  await page.getByRole('button', { name: 'Bildeinstellungen' }).click()
+  // The fake camera is no USB device – no anti-flicker filter to set.
+  await expect(page.getByText('Flimmerfilter')).toBeHidden()
+  const soft = page.getByRole('switch', { name: 'Weicher Kontrast' })
+  await expect(soft).not.toBeChecked()
+  await soft.click()
+  await expect(page.locator('main video')).toHaveCSS('filter', /contrast\(0\.87/)
+  await expect.poll(() => savedControls(workspace.profile)).toMatchObject({ softContrast: true })
+
+  // Saved right away (burst), so the file shows what was captured.
+  await page.keyboard.press('Escape')
+  const capture = async (): Promise<[number, number]> => {
+    const before = new Set(readdirSync(workspace.library))
+    await page.mouse.click(5, 300) // focus on the stage
+    await page.keyboard.press('Shift+Space')
+    await expect(toast(page, 'Bild gespeichert')).toBeVisible()
+    let name: string | undefined
+    await expect
+      .poll(() => (name = readdirSync(workspace.library).find((f) => !before.has(f))))
+      .toBeDefined()
+    return valueRange(app, join(workspace.library, name!))
+  }
+  const [low, high] = await capture()
+  expect(low).toBeGreaterThanOrEqual(15)
+  expect(high).toBeLessThanOrEqual(236)
+
+  await page.getByRole('button', { name: 'Bildeinstellungen' }).click()
+  await soft.click()
+  await expect(page.locator('main video')).toHaveCSS('filter', 'none')
+  await expect.poll(() => savedControls(workspace.profile)).toBeUndefined()
+  await page.keyboard.press('Escape')
+  await expect(toast(page, 'Bild gespeichert')).toBeHidden()
+  // The fake picture has pure colours: back to the full range.
+  const [plainLow] = await capture()
+  expect(plainLow).toBeLessThan(15)
 })

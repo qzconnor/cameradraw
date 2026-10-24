@@ -146,6 +146,8 @@ function createActions(): Actions {
       const unit = { exposureTime: '100 µs', colorTemperature: 'K' }[value as string]
       if (control.range) out[value] = ranged(values[value], control.range, unit)
     }
+    const flicker = cameraControls.powerLine
+    if (flicker) out.powerLineFrequency = { ...flicker, unit: 'Hz' }
     return out
   }
 
@@ -158,6 +160,7 @@ function createActions(): Actions {
     resolution: camera.resolution,
     resolutionSetting: camera.resolutionSetting,
     maxResolution: camera.maxResolution,
+    softContrast: camera.softContrast,
     controls: controlsState(),
     controlsChanged: cameraControls.changed,
     ...(cameraControls.lockedControls.length && cameraControls.lock
@@ -492,7 +495,7 @@ function createActions(): Actions {
       return cameraState()
     },
 
-    async setCamera({ paused, zoom, resolution, controls, resetControls }) {
+    async setCamera({ paused, zoom, resolution, softContrast, controls, resetControls }) {
       if (paused === true && !camera.paused) {
         if (camera.status !== 'live') throw new Error('Die Kamera läuft gerade nicht.')
         camera.setPaused(true)
@@ -510,6 +513,7 @@ function createActions(): Actions {
         if (!camera.selectedLabel) throw new Error('Es ist keine Kamera gewählt.')
         await camera.setResolution(resolution)
       }
+      if (softContrast !== undefined) await camera.setSoftContrast(softContrast)
       if (resetControls || (controls && Object.keys(controls).length)) {
         if (camera.status !== 'live' && camera.status !== 'starting') {
           throw new Error(

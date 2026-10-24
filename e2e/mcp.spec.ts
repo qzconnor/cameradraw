@@ -497,6 +497,11 @@ test.describe('switched on', () => {
     expect(reset.controls.exposureTime.value).toBe(50)
     expect(reset.controlsChanged).toBe(false)
 
+    expect(camera.controls.powerLineFrequency).toBeUndefined() // no USB camera
+    const soft = await call(client, 'set_camera', { softContrast: true })
+    expect(soft.softContrast).toBe(true)
+    await expect(page.locator('main video')).toHaveCSS('filter', /contrast/)
+
     const max = await call(client, 'set_camera', { resolution: 'max' })
     expect(max.resolutionSetting).toBe('max')
     await expect

@@ -114,6 +114,10 @@ export const useCameraStore = defineStore('camera', () => {
       ? 'max'
       : 'standard'
   )
+  /** "Weicher Kontrast" is on for this camera: picture and captures in the TV range 16–235. */
+  const softContrast = computed(
+    () => !!selectedLabel.value && !!settings.cameraControls[selectedLabel.value]?.softContrast
+  )
   /** The camera offers more than Full HD – only then there is a resolution to choose. */
   const offersMoreThanStandard = computed(() => {
     const max = maxResolution.value
@@ -350,6 +354,18 @@ export const useCameraStore = defineStore('camera', () => {
     if (status.value === 'live' && selectedId.value) await start(selectedId.value)
   }
 
+  /** Switches "Weicher Kontrast" for the chosen camera – it applies right away, no restart. */
+  async function setSoftContrast(on: boolean): Promise<void> {
+    const label = selectedLabel.value
+    if (!label) throw new Error('Es ist keine Kamera gewählt.')
+    await settings.updateCameraControls(label, (entry) => {
+      const next = { ...entry }
+      if (on) next.softContrast = true
+      else delete next.softContrast
+      return next
+    })
+  }
+
   async function init(): Promise<void> {
     if (initialized) return
     initialized = true
@@ -425,6 +441,7 @@ export const useCameraStore = defineStore('camera', () => {
     maxResolution,
     resolutionSetting,
     offersMoreThanStandard,
+    softContrast,
     refreshing,
     paused,
     minimized,
@@ -435,6 +452,7 @@ export const useCameraStore = defineStore('camera', () => {
     init,
     select,
     setResolution,
+    setSoftContrast,
     refresh,
     setZoom,
     stepZoom,

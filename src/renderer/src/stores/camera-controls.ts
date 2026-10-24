@@ -10,7 +10,9 @@ import {
   type ControlMode,
   type ValueControl
 } from '@shared/camera-controls'
+import type { PowerLineFrequency, PowerLineState } from '@shared/devices'
 import { CONTROL_LABELS } from '@/lib/camera-controls'
+import { parseUsbId } from '@/lib/camera-info'
 import { useCameraStore } from './camera'
 import { useModulesStore } from './modules'
 import { useSettingsStore } from './settings'
@@ -135,6 +137,11 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
   const refused = ref<ValueControl[]>([])
   /** The controls are being read or set up for a camera that just started. */
   const loading = ref(false)
+  /**
+   * Anti-flicker filter of the live camera – set through CameraDraw's helper program, as browsers
+   * offer no control for it. null: the camera has none (virtual cameras, the microscope).
+   */
+  const powerLine = ref<PowerLineState | null>(null)
 
   let track: MediaStreamTrack | null = null
   /** Label of the camera the controls belong to. */
@@ -199,6 +206,19 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
     return out
   }
 
+  /** The camera's anti-flicker filter – set to `wanted` first if that differs (and is possible). */
+  async function readPowerLine(
+    cameraLabel: string,
+    wanted?: PowerLineFrequency
+  ): Promise<PowerLineState | null> {
+    const usb = parseUsbId(cameraLabel)
+    if (!usb) return null
+    const state = await window.api.controls.powerLine(usb).catch(() => null)
+    if (!state || wanted === undefined || wanted === state.value) return state
+    if (!state.options.includes(wanted)) return state
+    return window.api.controls.powerLine(usb, wanted).catch(() => state)
+  }
+
   /** Reads the controls of a camera that just started and applies what the user set for it. */
   async function setup(stream: MediaStream | null): Promise<void> {
     const token = ++setupToken
@@ -210,6 +230,7 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
     reported.value = []
     values.value = {}
     refused.value = []
+    powerLine.value = null
     loading.value = !!t && !!cameraLabel
     if (!t || !cameraLabel) return void flushSave()
     try {
@@ -229,7 +250,9 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
       const usable = unlocked.filter((c) => !(c.kind === 'value' && refusedHere.includes(c.name)))
       const remembered = settings.cameraControls[cameraLabel]?.values
       if (remembered) await tryApply(t, constraintFor(remembered, usable))
+      const flicker = await readPowerLine(cameraLabel, remembered?.powerLineFrequency)
       if (token !== setupToken) return
+      powerLine.value = flicker
       reported.value = found
       refused.value = refusedHere
       readValues()
@@ -323,18 +346,53 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
       delete target.values[value]
       if (manual && amount !== undefined) target.values[value] = amount
     }
+    if (change.powerLineFrequency !== undefined && powerLine.value) {
+      if (!('powerLineFrequency' in target.originals)) {
+        target.originals.powerLineFrequency = powerLine.value.value
+      }
+      target.values.powerLineFrequency = change.powerLineFrequency
+    }
     clearTimeout(saveTimer)
     saving.value = true
     saveTimer = setTimeout(() => void flushSave(), SAVE_DELAY)
   }
 
   /**
-   * Sets controls of the live camera: e.g. `{ brightness: 140 }`, `{ exposureMode: 'continuous' }`
-   * or `{ exposureTime: 156.25 }` (a value switches its control to manual). Throws if the camera
-   * refuses; the values then show what it really uses.
+   * Sets controls of the live camera: e.g. `{ brightness: 140 }`, `{ exposureMode: 'continuous' }`,
+   * `{ exposureTime: 156.25 }` (a value switches its control to manual) or
+   * `{ powerLineFrequency: 50 }`. Throws if the camera refuses; the values then show what it really
+   * uses.
    */
   async function set(patch: CameraControlValues): Promise<void> {
     if (!track) throw new Error('Die Kamera läuft gerade nicht.')
+    const { powerLineFrequency, ...rest } = patch
+    if (powerLineFrequency !== undefined) await setPowerLine(powerLineFrequency)
+    if (Object.keys(rest).length) await setTrackControls(rest)
+  }
+
+  /** Sets the anti-flicker filter: 50 or 60 Hz (mains frequency of the lamps), 0 = off. */
+  async function setPowerLine(hz: PowerLineFrequency): Promise<void> {
+    const current = powerLine.value
+    const usb = parseUsbId(label.value)
+    if (!current || !usb) throw new Error('Diese Kamera hat keinen Flimmerfilter.')
+    if (!current.options.includes(hz)) {
+      throw new Error(
+        hz
+          ? `Diese Kamera kennt keine ${hz} Hz.`
+          : 'Diese Kamera lässt den Flimmerfilter nicht aus.'
+      )
+    }
+    remember({ powerLineFrequency: hz })
+    powerLine.value = { ...current, value: hz }
+    try {
+      powerLine.value = (await window.api.controls.powerLine(usb, hz)) ?? current
+    } catch (err) {
+      powerLine.value = (await window.api.controls.powerLine(usb).catch(() => null)) ?? current
+      throw err
+    }
+  }
+
+  async function setTrackControls(patch: CameraControlValues): Promise<void> {
     const offered = new Set(controls.value.flatMap(namesOf))
     for (const name of Object.keys(patch) as CameraControlName[]) {
       if (offered.has(name)) continue
@@ -364,8 +422,13 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
       values: {},
       originals: {}
     }))
-    if (!Object.keys(originals).length) return
-    wanted = { ...wanted, ...originals }
+    const { powerLineFrequency, ...rest } = originals
+    const usb = parseUsbId(cameraLabel)
+    if (powerLineFrequency !== undefined && powerLine.value && usb) {
+      powerLine.value = (await window.api.controls.powerLine(usb, powerLineFrequency)) ?? null
+    }
+    if (!Object.keys(rest).length) return
+    wanted = { ...wanted, ...rest }
     await drain()
   }
 
@@ -382,6 +445,7 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
     refused,
     values,
     loading,
+    powerLine,
     changed,
     isAuto,
     set,

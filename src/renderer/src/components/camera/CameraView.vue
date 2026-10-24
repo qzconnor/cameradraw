@@ -9,7 +9,7 @@ import AmbientLight from '@/components/common/AmbientLight.vue'
 import HintTooltip from '@/components/common/HintTooltip.vue'
 import { Toggle } from '@/components/ui/toggle'
 import { useVideoPicture } from '@/composables/useVideoPicture'
-import { captureFrame, type CapturedFrame } from '@/lib/capture'
+import { SOFT_CONTRAST, captureFrame, type CapturedFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import { canvasToBytes } from '@/lib/image'
 import { provideRemote } from '@/mcp/remote'
@@ -47,7 +47,7 @@ const editor = useEditorStore()
 const panels = usePanelsStore()
 const burst = useBurstStore()
 // Created with the camera view, so what the user set is applied whenever the camera starts.
-const cameraControls = useCameraControlsStore()
+useCameraControlsStore()
 
 /** The settings panel shows the camera's picture controls. */
 const pictureSettingsOpen = computed(
@@ -81,7 +81,8 @@ const viewportStyle = computed(() => ({
   width: `min(100cqw, calc(100cqh * ${aspect.value}))`
 }))
 const videoStyle = computed(() => ({
-  transform: `scale(${settings.mirror ? -digitalZoom.value : digitalZoom.value}, ${digitalZoom.value})`
+  transform: `scale(${settings.mirror ? -digitalZoom.value : digitalZoom.value}, ${digitalZoom.value})`,
+  filter: camera.softContrast ? SOFT_CONTRAST : undefined
 }))
 
 watch(
@@ -114,7 +115,13 @@ async function capture(direct = burst.enabled): Promise<GalleryItem | null> {
   if (!canCapture.value || !video.value) return null
   let frame: CapturedFrame
   try {
-    frame = captureFrame(video.value, settings.mirror, digitalZoom.value, picture.value)
+    frame = captureFrame(
+      video.value,
+      settings.mirror,
+      digitalZoom.value,
+      picture.value,
+      camera.softContrast ? SOFT_CONTRAST : undefined
+    )
   } catch (err) {
     toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
     throw err
@@ -276,11 +283,7 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
             </Toggle>
           </HintTooltip>
           <!-- data-panel-toggle: the settings panel would take the click as one outside of it. -->
-          <HintTooltip
-            v-if="cameraControls.controls.length"
-            label="Bildeinstellungen der Kamera"
-            side="top"
-          >
+          <HintTooltip label="Bildeinstellungen der Kamera" side="top">
             <Toggle
               :model-value="pictureSettingsOpen"
               aria-label="Bildeinstellungen"

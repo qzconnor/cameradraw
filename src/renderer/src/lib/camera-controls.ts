@@ -15,7 +15,8 @@ export const CONTROL_LABELS: Record<CameraControlName | AutoControl, string> = {
   colorTemperature: 'Farbtemperatur',
   focus: 'Fokus',
   focusMode: 'Fokus',
-  focusDistance: 'Fokus'
+  focusDistance: 'Fokus',
+  powerLineFrequency: 'Flimmerfilter'
 }
 
 /** Exposure times are in units of 100 µs. */

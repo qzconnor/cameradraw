@@ -82,10 +82,13 @@ die auch später noch Form für Form bearbeitbar bleiben.
   dem Abziehen wieder mit genau derselben Kamera, zoomt mit der Kamera selbst oder digital. Kameras,
   die mehr als Full HD können, nehmen auf Wunsch in ihrer höchsten Auflösung auf.
 - **Bildeinstellungen der Kamera** – Belichtung, Weißabgleich und Fokus (jeweils automatisch oder
-  von Hand), Helligkeit, Kontrast, Sättigung und Schärfe – direkt an der Kamera, also im Livebild
-  und in jeder Aufnahme. Der Knopf mit der Sonne unten rechts im Livebild öffnet sie. Angezeigt wird
-  nur, was die Kamera anbietet und auch wirklich annimmt; CameraDraw merkt es sich pro Kamera und
-  stellt es bei jedem Start wieder ein. „Zurücksetzen“ holt die Werte von vorher zurück.
+  von Hand), Helligkeit, Kontrast, Sättigung, Schärfe und der Flimmerfilter (50 oder 60 Hz, wie in
+  Logi Capture) – direkt an der Kamera, also im Livebild und in jeder Aufnahme. Der Knopf mit der
+  Sonne unten rechts im Livebild öffnet sie. Angezeigt wird nur, was die Kamera anbietet und auch
+  wirklich annimmt; CameraDraw merkt es sich pro Kamera und stellt es bei jedem Start wieder ein.
+  „Zurücksetzen“ holt die Werte von vorher zurück.
+- **Weicher Kontrast** – Auf Wunsch zeigt und speichert CameraDraw das Bild einer Kamera wie Logi
+  Capture im Bereich 16–235: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger.
 - **Einstellungen in Tabs** – Allgemein (Speicherordner, Ambient Light), Kamera (Gerät, Auflösung,
   Spiegeln, Zoom), Bild (siehe oben) und KI (MCP-Server).
 - **Geräte-Module** – Gerätetypen bringen eigene Funktionen mit, z. B. Foto- und Zoom-Tasten des
@@ -242,8 +245,9 @@ oder rechts aus – `at` ist dann die Mitte oder das rechte Ende der Oberkante; 
 Die Bildeinstellungen der Kamera stehen in `get_state` unter `camera.controls` – mit Wert, Bereich
 und Modus, so wie `set_camera` sie mit `controls` annimmt (z. B. `{ "exposureTime": 156.25 }` für
 1/64 s; ein Wert schaltet auf manuell, `"exposureMode": "continuous"` zurück auf automatisch).
+Der Flimmerfilter ist `powerLineFrequency` (50 oder 60 Hz, 0 = aus, wenn die Kamera das kann).
 `resetControls: true` stellt die Werte von vorher wieder her, `resolution: "max"` wählt die höchste
-Auflösung der Kamera.
+Auflösung der Kamera, `softContrast: true` schaltet den weichen Kontrast ein.
 
 Ein Assistent zeichnet in eigene Ebenen (in der Liste mit Roboter-Symbol), nicht in die des
 Benutzers: `editor_draw` ohne `layer` nimmt die zuletzt benutzte eigene, beim ersten Mal eine neue
@@ -488,6 +492,29 @@ geben die Taste an ein zweites Programm ebenfalls nicht weiter.
 </details>
 
 <details>
+<summary><b>Weicher Kontrast und Flimmerfilter (wie Logi Capture)</b></summary>
+
+<br />
+
+Logi Capture (`C:\Program Files\Logitech\LogiCapture`) baut auf der XSplit-Engine auf; seine
+Oberfläche ist JavaScript in `build/index.html`. Beim Einbinden einer Kamera setzt es MJPG
+1920×1080 mit 30 fps, `videoPowerlineFrequency` (50 Hz, außer in der Region „WorldWide“),
+`camAutoExposurePriority` und `videoBacklightCompensation` (sein „HDR“) und lässt Belichtung,
+Weißabgleich und Fokus automatisch – nachgeschärft oder entrauscht wird nichts.
+
+Dass sein Bild ruhiger wirkt, liegt an der Darstellung: Zwei gleichzeitige Screenshots, Pixel für
+Pixel verglichen, ergeben für alle drei Kanäle `Logi = 0,84 · CameraDraw + 16` – der Bereich 0–255
+wird auf 16–235 gestaucht. Chromium rechnet das MJPEG der Webcam korrekt um (BT.601, voller
+Bereich). „Weicher Kontrast“ macht dasselbe wie Logi Capture, im Livebild als CSS-Filter und in der
+Aufnahme mit `ctx.filter` (`SOFT_CONTRAST` in `src/renderer/src/lib/capture.ts`).
+
+Logitech-Webcams wie die c922 starten mit 60 Hz; unter 50-Hz-Licht flackert dann das Bild. Logi
+Capture stellt sie bei jedem Start um, das hält bis zum nächsten Abstecken. CameraDraw setzt den
+gewählten Flimmerfilter ebenfalls bei jedem Start der Kamera.
+
+</details>
+
+<details>
 <summary><b>Hintergrunddienst „CameraDraw Buttons“</b></summary>
 
 <br />
@@ -523,5 +550,8 @@ Benutzer beschreibbaren App-Ordner startet. Danach startet der Dienst automatisc
 - `cameradraw-buttons devices` listet die USB-Geräte je USBPcap-Hub (ohne Admin-Rechte).
 - `cameradraw-buttons parse <datei.pcap>` sucht Tastenpakete in einer Aufzeichnung (ohne
   Admin-Rechte).
+- `cameradraw-buttons powerline <vid:pid> [0|1|2]` liest bzw. setzt den Flimmerfilter (UVC
+  Power Line Frequency: aus, 50 Hz, 60 Hz) und gibt ihn als JSON aus – ohne Dienst und ohne
+  Admin-Rechte. Die App nutzt das für den Flimmerfilter im Bild-Tab; Browser bieten dafür nichts.
 
 </details>

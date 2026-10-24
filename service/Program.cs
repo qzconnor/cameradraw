@@ -15,6 +15,7 @@ return args.FirstOrDefault()?.ToLowerInvariant() switch
     "devices" => ListDevices(),
     "parse" when args.Length == 2 => Parse(args[1]),
     "brightness" when args.Length is 2 or 3 => PollBrightness(args[1], args.ElementAtOrDefault(2)),
+    "powerline" when args.Length is 2 or 3 => SetPowerLine(args[1], args.ElementAtOrDefault(2)),
     _ => Usage()
 };
 
@@ -108,6 +109,15 @@ static int PollBrightness(string device, string? intervalMs)
     return BrightnessPoller.Run(id, TimeSpan.FromMilliseconds(interval));
 }
 
+/// <summary>Reads, or sets and then reads, the camera's anti-flicker filter (no admin rights).</summary>
+static int SetPowerLine(string device, string? value)
+{
+    var parts = device.Split(':');
+    if (parts.Length != 2 || !new DeviceRef(parts[0], parts[1]).TryGetId(out var id)) return Usage();
+    if (value == null) return PowerLine.Run(id, null);
+    return int.TryParse(value, out var wanted) && wanted is >= 0 and <= 3 ? PowerLine.Run(id, wanted) : Usage();
+}
+
 static int Usage()
 {
     Console.WriteLine("""
@@ -120,6 +130,8 @@ static int Usage()
           cameradraw-buttons parse <datei>       Tastenpakete in einer USBPcap-Aufzeichnung (.pcap) suchen
           cameradraw-buttons brightness v:p [ms] UVC-Helligkeit lesen und Änderungen als JSON ausgeben,
                                                  bis stdin endet (Standard alle 65 ms, ohne Admin)
+          cameradraw-buttons powerline v:p [n]   Flimmerfilter lesen bzw. setzen (0 aus, 1 50 Hz,
+                                                 2 60 Hz) und als JSON ausgeben (ohne Admin)
         """);
     return 1;
 }

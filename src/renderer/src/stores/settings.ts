@@ -37,7 +37,9 @@ export const useSettingsStore = defineStore('settings', () => {
     // Optimistic, so toggles (gallery, mirror) react instantly; reverted if the main process refuses.
     if (settings.value) settings.value = { ...settings.value, ...patch }
     try {
-      apply(await window.api.settings.update(patch))
+      // A plain copy: maps built from the current settings hold reactive proxies, which IPC
+      // cannot send ("An object could not be cloned").
+      apply(await window.api.settings.update(JSON.parse(JSON.stringify(patch))))
     } catch (err) {
       await load()
       throw err
@@ -52,7 +54,10 @@ export const useSettingsStore = defineStore('settings', () => {
     const map = { ...cameraControls.value }
     const entry = change(map[label] ?? { values: {}, originals: {} })
     const empty =
-      !entry.resolution && !Object.keys(entry.values).length && !Object.keys(entry.originals).length
+      !entry.resolution &&
+      !entry.softContrast &&
+      !Object.keys(entry.values).length &&
+      !Object.keys(entry.originals).length
     if (empty) delete map[label]
     else map[label] = entry
     await update({ cameraControls: map })

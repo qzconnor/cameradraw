@@ -83,7 +83,11 @@ const cameraControls = z.object({
   brightness: z.number().optional(),
   contrast: z.number().optional(),
   saturation: z.number().optional(),
-  sharpness: z.number().optional()
+  sharpness: z.number().optional(),
+  powerLineFrequency: z
+    .union([z.literal(0), z.literal(50), z.literal(60)])
+    .optional()
+    .describe('Anti-flicker filter: mains frequency of the lamps in Hz, 0 = off')
 })
 const indices = z
   .array(z.number().int().min(0))
@@ -315,11 +319,12 @@ export function createMcpServer(): McpServer {
   )
   add(
     'set_camera',
-    'Pauses or resumes the camera picture, sets its zoom (1 = none, up to maxZoom from get_state) and resolution ("standard": up to Full HD, "max": the largest the camera offers, see maxResolution – reopens the camera). controls sets what the camera itself adjusts – only those listed in get_state → camera.controls, within their min/max: exposure, white balance and focus each have a mode ("continuous" = automatic, "manual") and a value used in manual mode (exposureTime in units of 100 µs, colorTemperature in Kelvin, focusDistance in units of the camera) – a value alone switches to manual; brightness, contrast, saturation and sharpness are numbers in units of the camera. The camera may round a value; the result shows what it uses. CameraDraw remembers them for this camera. resetControls: true restores the values the camera had before CameraDraw changed them (applied before controls).',
+    'Pauses or resumes the camera picture, sets its zoom (1 = none, up to maxZoom from get_state) and resolution ("standard": up to Full HD, "max": the largest the camera offers, see maxResolution – reopens the camera). controls sets what the camera itself adjusts – only those listed in get_state → camera.controls, within their min/max: exposure, white balance and focus each have a mode ("continuous" = automatic, "manual") and a value used in manual mode (exposureTime in units of 100 µs, colorTemperature in Kelvin, focusDistance in units of the camera) – a value alone switches to manual; brightness, contrast, saturation and sharpness are numbers in units of the camera; powerLineFrequency is the anti-flicker filter (50 or 60 Hz, the mains frequency of the lamps; 0 = off where its options allow it). The camera may round a value; the result shows what it uses. CameraDraw remembers them for this camera. resetControls: true restores the values the camera had before CameraDraw changed them (applied before controls). softContrast: true shows and captures the picture of this camera in the TV range 16–235 like Logi Capture – calmer colours, highlights do not burn out.',
     z.object({
       paused: z.boolean().optional(),
       zoom: z.number().min(1).optional(),
       resolution: z.enum(['standard', 'max']).optional(),
+      softContrast: z.boolean().optional(),
       controls: cameraControls.optional(),
       resetControls: z.boolean().optional()
     }),

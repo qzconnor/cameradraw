@@ -1,8 +1,11 @@
+import type { PowerLineFrequency } from './devices'
+
 /**
  * Picture controls of a camera: exposure, white balance, focus, brightness and so on. The names are
  * those of the W3C Image Capture constraints Chromium offers on a camera track; on Windows it reads
  * and sets them through the camera driver (UVC processing unit and camera terminal). Which ones a
- * camera has, and whether it really accepts them, differs from camera to camera.
+ * camera has, and whether it really accepts them, differs from camera to camera. The anti-flicker
+ * filter (`powerLineFrequency`) is not among them: CameraDraw sets it through its helper program.
  */
 
 /** Controls set by a single number (in the camera's own units). */
@@ -37,6 +40,8 @@ export interface CameraControlValues {
   colorTemperature?: number
   focusMode?: ControlMode
   focusDistance?: number
+  /** Anti-flicker filter in Hz (mains frequency of the lamps), 0 = off. */
+  powerLineFrequency?: PowerLineFrequency
 }
 export type CameraControlName = keyof CameraControlValues
 
@@ -50,6 +55,8 @@ export type CameraResolution = 'standard' | 'max'
 export interface CameraControlSettings {
   /** Only set for `max` – the default is `standard`. */
   resolution?: 'max'
+  /** Show and capture the picture in the TV range 16–235, like Logi Capture (see `SOFT_CONTRAST`). */
+  softContrast?: true
   /** Values set in CameraDraw – applied again whenever the camera starts. */
   values: CameraControlValues
   /** The camera's values before CameraDraw first changed them – "Zurücksetzen" restores these. */
@@ -69,6 +76,9 @@ export function sanitizeControlValues(value: unknown): CameraControlValues {
   for (const key of NUMBER_KEYS) {
     if (typeof value[key] === 'number' && Number.isFinite(value[key])) out[key] = value[key]
   }
+  if ([0, 50, 60].includes(value.powerLineFrequency as number)) {
+    out.powerLineFrequency = value.powerLineFrequency
+  }
   return out as CameraControlValues
 }
 
@@ -82,6 +92,7 @@ export function sanitizeControlSettings(
     if (!isRecord(entry)) return null
     out[label] = {
       ...(entry.resolution === 'max' ? { resolution: 'max' } : {}),
+      ...(entry.softContrast === true ? { softContrast: true } : {}),
       values: sanitizeControlValues(entry.values),
       originals: sanitizeControlValues(entry.originals)
     }

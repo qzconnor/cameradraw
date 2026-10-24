@@ -304,6 +304,7 @@ export const IPC = {
   buttonsPressed: 'buttons:pressed',
   controlsWatchBrightness: 'controls:watch-brightness',
   controlsBrightness: 'controls:brightness',
+  controlsPowerLine: 'controls:power-line',
   updatesState: 'updates:state',
   updatesCheck: 'updates:check',
   updatesDownload: 'updates:download',
