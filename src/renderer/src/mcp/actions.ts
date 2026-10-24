@@ -20,6 +20,7 @@ import { useBurstStore } from '@/stores/burst'
 import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore, type ControlRange } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
+import { useFocusPeakingStore } from '@/stores/focus-peaking'
 import { useGalleryStore } from '@/stores/gallery'
 import { useMcpStore } from '@/stores/mcp'
 import { usePanelsStore } from '@/stores/panels'
@@ -114,6 +115,7 @@ function createActions(): Actions {
   const gallery = useGalleryStore()
   const panels = usePanelsStore()
   const burst = useBurstStore()
+  const peaking = useFocusPeakingStore()
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -151,6 +153,20 @@ function createActions(): Actions {
     return out
   }
 
+  /** Sharpness of the middle of the live picture right now, null while it is not live. */
+  const sharpness = (): number | null => {
+    const measured = remotes.camera.value?.sharpness()
+    return measured ? Math.round(measured.value * 100) / 100 : null
+  }
+
+  const peakingState = (): Record<string, unknown> => ({
+    enabled: peaking.enabled,
+    level: peaking.level,
+    color: peaking.color,
+    sharpness: sharpness(),
+    ...(peaking.best ? { best: Math.round(peaking.best * 100) / 100 } : {})
+  })
+
   const cameraState = (): Record<string, unknown> => ({
     status: camera.status,
     paused: camera.paused,
@@ -171,7 +187,8 @@ function createActions(): Actions {
     maxZoom: camera.maxZoom,
     zoomMode: camera.zoomMode,
     mirror: settings.mirror,
-    burst: burstState()
+    burst: burstState(),
+    focusPeaking: peakingState()
   })
 
   const settingsState = (): Record<string, unknown> => ({
@@ -553,6 +570,13 @@ function createActions(): Actions {
       if (mode === 'save') return { saved: item && imageInfo(item) }
       await waitForEditor()
       return { editor: editorSummary() }
+    },
+
+    async setFocusPeaking({ enabled, level, color }) {
+      if (level !== undefined) peaking.level = level
+      if (color !== undefined) peaking.color = color.toLowerCase()
+      if (enabled !== undefined) peaking.enabled = enabled
+      return peakingState()
     },
 
     async setBurst({ enabled, project }) {

@@ -556,6 +556,30 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client turns on the focus aid and reads the sharpness', async ({ page }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    // Measured also while the aid is off – e.g. to find the sharpest focus.
+    const state = await call(client, 'get_state')
+    expect(state.camera.focusPeaking).toMatchObject({ enabled: false, level: 'medium' })
+    expect(state.camera.focusPeaking.sharpness).toBeGreaterThan(0)
+
+    const on = await call(client, 'set_focus_peaking', {
+      enabled: true,
+      level: 'low',
+      color: '#FFE600'
+    })
+    expect(on).toMatchObject({ enabled: true, level: 'low', color: '#ffe600' })
+    await expect(page.getByRole('meter', { name: 'Schärfe' })).toBeVisible()
+    expect(await callError(client, 'set_focus_peaking', { level: 'max' })).toMatch(/level/)
+
+    await call(client, 'set_focus_peaking', { enabled: false })
+    await expect(page.getByRole('meter', { name: 'Schärfe' })).toHaveCount(0)
+    await client.close()
+  })
+
   test('keys and mouse sent by a client reach the app', async ({ page }) => {
     await waitForLiveCamera(page)
     await waitForMcp(page)

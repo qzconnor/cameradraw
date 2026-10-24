@@ -92,6 +92,11 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Sonne unten rechts im Livebild öffnet sie. Angezeigt wird nur, was die Kamera anbietet und auch
   wirklich annimmt; CameraDraw merkt es sich pro Kamera und stellt es bei jedem Start wieder ein.
   „Zurücksetzen“ holt die Werte von vorher zurück.
+- **Schärfehilfe** – Der Knopf mit dem Fokus-Symbol unten rechts lässt im Livebild alle Kanten,
+  die gerade scharf sind, farbig aufleuchten (Focus Peaking) – gemessen in voller Auflösung, und
+  nur scharfe Kanten, nicht einfach kontrastreiche. Oben zeigt ein Balken, wie scharf die Bildmitte
+  im Vergleich zu den letzten Sekunden ist: am Fokus drehen, bis er voll und grün ist.
+  Empfindlichkeit (wenig, mittel, viel) und Farbe lassen sich dort wählen.
 - **Weicher Kontrast** – Auf Wunsch zeigt und speichert CameraDraw das Bild einer Kamera wie Logi
   Capture im Bereich 16–235: Helles frisst nicht aus, Farben und Farbstiche wirken ruhiger.
 - **Einstellungen in Tabs** – Allgemein (Speicherordner, Ambient Light), Kamera (Gerät, Auflösung,
@@ -101,7 +106,7 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
   installiert sie mit einem Neustart. Die Versionshinweise aller Versionen stehen im Updates-Panel.
 - **KI-Steuerung (MCP)** – Auf Wunsch bedienen KI-Assistenten wie Claude Code die laufende App über
-  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, zeichnen, nummerieren, messen, speichern – live im
+  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, scharfstellen, zeichnen, nummerieren, messen, speichern – live im
   Fenster zu sehen. Solange ein Assistent arbeitet, leuchtet der Fensterrand in seinen Farben, oben
   steht, wer gerade was tut („Claude Code zeichnet …“), und ein eigener Zeiger mit seinem Namen
   zeigt, wohin er klickt. Standardmäßig aus.

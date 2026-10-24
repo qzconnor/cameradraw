@@ -2,7 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 // Left/right mirror icon (vertical centre line). Lucide's old `FlipHorizontal2` alias shows up/down.
-import { ImagesIcon, SunMediumIcon, TrianglesCenterlineDashedVerticalIcon } from '@lucide/vue'
+import {
+  FocusIcon,
+  ImagesIcon,
+  SunMediumIcon,
+  TrianglesCenterlineDashedVerticalIcon
+} from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import type { CaptureInfo, GalleryItem } from '@shared/types'
 import AmbientLight from '@/components/common/AmbientLight.vue'
@@ -12,6 +17,7 @@ import { useVideoPicture } from '@/composables/useVideoPicture'
 import { SOFT_CONTRAST, captureFrame, type CapturedFrame } from '@/lib/capture'
 import { errorMessage } from '@/lib/format'
 import { canvasToBytes } from '@/lib/image'
+import { measureSharpness } from '@/lib/sharpness'
 import { provideRemote } from '@/mcp/remote'
 import {
   isBlockingOverlayOpen,
@@ -24,10 +30,13 @@ import { useBurstStore } from '@/stores/burst'
 import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
+import { useFocusPeakingStore } from '@/stores/focus-peaking'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
 import BurstBar from './BurstBar.vue'
 import CameraStatusOverlay from './CameraStatusOverlay.vue'
+import FocusPeaking from './FocusPeaking.vue'
+import FocusPeakingBar from './FocusPeakingBar.vue'
 import PauseButton from './PauseButton.vue'
 import ShutterButton from './ShutterButton.vue'
 import ZoomControl from './ZoomControl.vue'
@@ -46,6 +55,7 @@ const settings = useSettingsStore()
 const editor = useEditorStore()
 const panels = usePanelsStore()
 const burst = useBurstStore()
+const peaking = useFocusPeakingStore()
 // Created with the camera view, so what the user set is applied whenever the camera starts.
 useCameraControlsStore()
 
@@ -156,7 +166,11 @@ async function openInEditor(frame: CapturedFrame, info: CaptureInfo): Promise<vo
 
 provideRemote('camera', {
   canCapture: () => canCapture.value && !!video.value?.videoWidth,
-  capture
+  capture,
+  sharpness: () =>
+    isLive.value && video.value
+      ? measureSharpness(video.value, picture.value, digitalZoom.value)
+      : null
 })
 
 function onWheel(e: WheelEvent): void {
@@ -239,17 +253,26 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           class="size-full object-cover"
           :style="videoStyle"
         />
+        <FocusPeaking
+          :video="video"
+          :picture="picture"
+          :zoom="digitalZoom"
+          :mirror="settings.mirror"
+          :active="isLive"
+        />
       </div>
     </div>
 
     <CameraStatusOverlay />
 
-    <!-- While burst capture is on: counter and target project, at the top like a mode banner. -->
+    <!-- Modes and aids that are on, at the top like banners: burst capture with its counter and
+         target project, the focus aid with its meter. -->
     <div
-      v-if="burst.enabled && playing"
-      class="pointer-events-none absolute inset-x-4 top-4 flex justify-center"
+      v-if="playing && (burst.enabled || peaking.enabled)"
+      class="pointer-events-none absolute inset-x-4 top-4 flex flex-col items-center gap-2"
     >
-      <BurstBar class="pointer-events-auto" />
+      <BurstBar v-if="burst.enabled" class="pointer-events-auto" />
+      <FocusPeakingBar v-if="peaking.enabled" class="pointer-events-auto" />
     </div>
 
     <!-- Bottom controls on one line: zoom left, shutter centred, pause right next to it and mirror
@@ -280,6 +303,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           <HintTooltip label="Serienaufnahme – jedes Bild sofort speichern" side="top">
             <Toggle v-model="burst.enabled" aria-label="Serienaufnahme">
               <ImagesIcon />
+            </Toggle>
+          </HintTooltip>
+          <HintTooltip label="Schärfehilfe – scharfe Kanten leuchten" side="top">
+            <Toggle v-model="peaking.enabled" aria-label="Schärfehilfe">
+              <FocusIcon />
             </Toggle>
           </HintTooltip>
           <!-- data-panel-toggle: the settings panel would take the click as one outside of it. -->

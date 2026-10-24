@@ -354,6 +354,17 @@ export function createMcpServer(): McpServer {
     (args) => remote('capture', args)
   )
   add(
+    'set_focus_peaking',
+    'The focus aid of the live view ("Schärfehilfe"): enabled shows focus peaking – edges that are in focus light up in color – and a meter of how sharp the picture is. level: how readily edges light up (low, medium, high); color: of the edges, #rrggbb (the app offers #ff2d55, #39ff14, #ffe600, #00b4ff). The result (like get_state → camera.focusPeaking) has the sharpness of the middle of the picture, measured now also while the aid is off: higher is sharper, but it only compares pictures of the same scene – e.g. to find the sharpest focusDistance with set_camera; best is the highest of the last seconds while the aid is on.',
+    z.object({
+      enabled: z.boolean().optional(),
+      level: z.enum(['low', 'medium', 'high']).optional(),
+      color: color.optional()
+    }),
+    CHANGES,
+    (args) => remote('setFocusPeaking', args)
+  )
+  add(
     'set_burst',
     'Burst capture: while on, Space, the shutter and the photo button save each picture right away. Also sets the project the pictures go to (null = none).',
     z.object({ enabled: z.boolean().optional(), project: project.optional() }),

@@ -1,6 +1,7 @@
 import { onBeforeUnmount, shallowRef, type ShallowRef } from 'vue'
 import type { GalleryItem, ImagePoint } from '@shared/types'
 import type { DrawingCanvas } from '@/composables/useDrawingCanvas'
+import type { Sharpness } from '@/lib/sharpness'
 
 /**
  * What the camera view and the editor offer the remote control (MCP, see `./actions.ts`) while
@@ -15,6 +16,8 @@ export interface CameraRemote {
    * saved image. Rejects if that failed (the app shows why in a toast as well).
    */
   capture(direct: boolean): Promise<GalleryItem | null>
+  /** How sharp the live picture is right now (null while it is not live). */
+  sharpness(): Sharpness | null
 }
 
 export interface EditorRemote {

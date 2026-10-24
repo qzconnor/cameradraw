@@ -154,6 +154,7 @@ export interface RemoteActionArgs {
   }
   capture: { mode?: 'edit' | 'save' }
   setBurst: { enabled?: boolean; project?: string | null }
+  setFocusPeaking: { enabled?: boolean; level?: 'low' | 'medium' | 'high'; color?: string }
   showPanel: {
     panel: RemotePanel
     project?: string | null
