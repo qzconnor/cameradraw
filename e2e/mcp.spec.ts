@@ -599,6 +599,31 @@ test.describe('switched on', () => {
     await client.close()
   })
 
+  test('a client takes a focus stack – swept by the camera or by hand', async ({ page }) => {
+    await waitForLiveCamera(page)
+    await waitForMcp(page)
+    const client = await connect()
+
+    expect((await call(client, 'get_state')).camera.focusStack).toMatchObject({
+      enabled: false,
+      state: 'idle',
+      canSweep: true
+    })
+    const swept = await call(client, 'focus_stack', { action: 'sweep', frames: 4, mode: 'save' })
+    expect(swept.saved.path).toMatch(/^CameraDraw_.*\.png$/)
+    expect(await editorOpen(page)).toBe(false)
+
+    const started = await call(client, 'focus_stack', { action: 'start' })
+    expect(started).toMatchObject({ enabled: true, state: 'recording' })
+    expect(await callError(client, 'capture')).toContain('Fokus-Stapel')
+    await expect.poll(() => storeValue<number>(page, 'focusStack', 'frames')).toBeGreaterThan(1)
+    const finished = await call(client, 'focus_stack', { action: 'finish' })
+    expect(finished.editor).toBeTruthy()
+    await waitForEditor(page)
+    expect(await callError(client, 'focus_stack', { action: 'finish' })).toContain('start')
+    await client.close()
+  })
+
   test('keys and mouse sent by a client reach the app', async ({ page }) => {
     await waitForLiveCamera(page)
     await waitForMcp(page)

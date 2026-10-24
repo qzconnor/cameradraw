@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 // Left/right mirror icon (vertical centre line). Lucide's old `FlipHorizontal2` alias shows up/down.
 import {
   BlendIcon,
   FocusIcon,
   ImagesIcon,
+  Layers2Icon,
   SunMediumIcon,
   TrianglesCenterlineDashedVerticalIcon
 } from '@lucide/vue'
@@ -32,6 +33,7 @@ import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
 import { useFocusPeakingStore } from '@/stores/focus-peaking'
+import { useFocusStackStore, type StackSource } from '@/stores/focus-stack'
 import { useReferenceStore } from '@/stores/reference'
 import { usePanelsStore } from '@/stores/panels'
 import { useSettingsStore } from '@/stores/settings'
@@ -39,6 +41,7 @@ import BurstBar from './BurstBar.vue'
 import CameraStatusOverlay from './CameraStatusOverlay.vue'
 import FocusPeaking from './FocusPeaking.vue'
 import FocusPeakingBar from './FocusPeakingBar.vue'
+import FocusStackBar from './FocusStackBar.vue'
 import ReferenceBar from './ReferenceBar.vue'
 import PauseButton from './PauseButton.vue'
 import ShutterButton from './ShutterButton.vue'
@@ -60,6 +63,7 @@ const panels = usePanelsStore()
 const burst = useBurstStore()
 const peaking = useFocusPeakingStore()
 const reference = useReferenceStore()
+const stack = useFocusStackStore()
 // Created with the camera view, so what the user set is applied whenever the camera starts.
 useCameraControlsStore()
 
@@ -130,6 +134,28 @@ watch([() => props.active, () => camera.paused], ([active, paused]) => {
   else if (active) void video.value?.play().catch(() => undefined)
 })
 
+/** The current frame in full resolution, as shown (mirrored, zoomed, soft contrast). */
+function grab(): CapturedFrame {
+  if (!video.value) throw new Error('Kein Kamerabild verfügbar')
+  return captureFrame(
+    video.value,
+    settings.mirror,
+    digitalZoom.value,
+    picture.value,
+    camera.softContrast ? SOFT_CONTRAST : undefined
+  )
+}
+
+/** Opens a picture in the editor – or, `direct` (burst capture), saves it right away. */
+async function deliver(frame: CapturedFrame, direct: boolean): Promise<GalleryItem | null> {
+  emit('captured')
+  // Zoom and frame width carry a calibration of the camera over to this picture.
+  const info = { zoom: camera.zoom, frameWidth: frame.frameWidth }
+  if (direct) return burst.save(frame, info)
+  await openInEditor(frame, info)
+  return null
+}
+
 /**
  * Takes a picture and opens it in the editor – or, with `direct` (burst capture), saves it and
  * stays in the live view, ready for the next one right away. Resolves with the saved image
@@ -139,29 +165,58 @@ async function capture(direct = burst.enabled): Promise<GalleryItem | null> {
   if (!canCapture.value || !video.value) return null
   let frame: CapturedFrame
   try {
-    frame = captureFrame(
-      video.value,
-      settings.mirror,
-      digitalZoom.value,
-      picture.value,
-      camera.softContrast ? SOFT_CONTRAST : undefined
-    )
+    frame = grab()
   } catch (err) {
     toast.error('Aufnahme fehlgeschlagen', { description: errorMessage(err) })
     throw err
   }
-  emit('captured')
-  // Zoom and frame width carry a calibration of the camera over to this picture.
-  const info = { zoom: camera.zoom, frameWidth: frame.frameWidth }
-  if (direct) return burst.save(frame, info)
-  await openInEditor(frame, info)
-  return null
+  return deliver(frame, direct)
 }
 
-/** Capture by key, button or device – failures are shown as toasts. */
+/**
+ * Capture by key, button or device – failures are shown as toasts. With focus stacking on, it
+ * starts a stack and finishes it the next time.
+ */
 function shoot(direct = burst.enabled): void {
+  if (stack.enabled) {
+    if (stack.state === 'recording') stack.finish().catch(() => undefined)
+    else if (stack.state === 'idle' && canCapture.value) {
+      try {
+        stack.start(direct)
+      } catch (err) {
+        toast.error('Fokus-Stacking nicht möglich', { description: errorMessage(err) })
+      }
+    }
+    return
+  }
   capture(direct).catch(() => undefined)
 }
+
+// Focus stacking takes its pictures here; the merged one goes where a capture would.
+const stackSource: StackSource = {
+  grab,
+  nextFrame: () =>
+    new Promise<void>((resolve) => {
+      const el = video.value
+      if (!el) return resolve()
+      // A camera that stops sending would hold the stack up for ever.
+      const timer = setTimeout(resolve, 500)
+      el.requestVideoFrameCallback(() => {
+        clearTimeout(timer)
+        resolve()
+      })
+    }),
+  deliver
+}
+stack.attach(stackSource)
+onBeforeUnmount(() => stack.detach(stackSource))
+
+// The camera stopped (paused, unplugged) while pictures were taken: the stack is dropped.
+watch(isLive, (live) => {
+  if (live || (stack.state !== 'recording' && stack.state !== 'sweeping')) return
+  stack.cancel()
+  toast('Fokus-Stacking abgebrochen', { description: 'Die Kamera läuft nicht mehr.' })
+})
 
 async function openInEditor(frame: CapturedFrame, info: CaptureInfo): Promise<void> {
   capturing.value = true
@@ -293,12 +348,13 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
     <CameraStatusOverlay />
 
     <!-- Modes and aids that are on, at the top like banners: burst capture with its counter and
-         target project, the focus aid with its meter, the reference picture. -->
+         target project, focus stacking, the focus aid with its meter, the reference picture. -->
     <div
-      v-if="playing && (burst.enabled || peaking.enabled || reference.enabled)"
+      v-if="playing && (burst.enabled || stack.enabled || peaking.enabled || reference.enabled)"
       class="pointer-events-none absolute inset-x-4 top-4 flex flex-col items-center gap-2"
     >
       <BurstBar v-if="burst.enabled" class="pointer-events-auto" />
+      <FocusStackBar v-if="stack.enabled" class="pointer-events-auto" />
       <FocusPeakingBar v-if="peaking.enabled" class="pointer-events-auto" />
       <ReferenceBar v-if="reference.enabled" class="pointer-events-auto" />
     </div>
@@ -315,8 +371,9 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 
       <div class="pointer-events-auto">
         <ShutterButton
-          :disabled="!canCapture"
+          :disabled="stack.state === 'recording' ? false : !canCapture || stack.busy"
           :burst="burst.enabled"
+          :stack="stack.enabled ? (stack.state === 'recording' ? 'recording' : 'ready') : null"
           @click="shoot($event.shiftKey || burst.enabled)"
         />
       </div>
@@ -331,6 +388,11 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
           <HintTooltip label="Serienaufnahme – jedes Bild sofort speichern" side="top">
             <Toggle v-model="burst.enabled" aria-label="Serienaufnahme">
               <ImagesIcon />
+            </Toggle>
+          </HintTooltip>
+          <HintTooltip label="Fokus-Stacking – überall scharf aus mehreren Bildern" side="top">
+            <Toggle v-model="stack.enabled" aria-label="Fokus-Stacking" :disabled="stack.busy">
+              <Layers2Icon />
             </Toggle>
           </HintTooltip>
           <HintTooltip label="Schärfehilfe – scharfe Kanten leuchten" side="top">

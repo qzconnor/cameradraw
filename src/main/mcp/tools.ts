@@ -378,6 +378,17 @@ export function createMcpServer(): McpServer {
     (args) => remote('setReference', args)
   )
   add(
+    'focus_stack',
+    'Focus stacking: pictures of the same spot, each sharp at another depth, merged into one that is sharp throughout (lined up against the slight zoom of focusing; cut to the part all pictures show). action "sweep": a camera that sets its own focus (get_state → camera.focusStack.canSweep, e.g. a webcam with focusDistance) moves it from near to far, takes frames pictures (default 15) and merges them – takes several seconds; its focus is put back afterwards. action "start": pictures are taken while the person turns the focus by hand (a microscope\'s focus wheel) – ask them to turn it slowly through the whole depth, then "finish" merges them ("cancel" drops them). Like capture, mode "edit" (default) opens the result in the editor, "save" saves it right away. Needs the live view.',
+    z.object({
+      action: z.enum(['sweep', 'start', 'finish', 'cancel']),
+      frames: z.number().int().min(2).max(60).optional().describe('Pictures of a sweep'),
+      mode: z.enum(['edit', 'save']).optional()
+    }),
+    CHANGES,
+    (args) => remote('focusStack', args)
+  )
+  add(
     'set_burst',
     'Burst capture: while on, Space, the shutter and the photo button save each picture right away. Also sets the project the pictures go to (null = none).',
     z.object({ enabled: z.boolean().optional(), project: project.optional() }),

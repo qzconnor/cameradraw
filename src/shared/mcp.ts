@@ -153,6 +153,11 @@ export interface RemoteActionArgs {
     resetControls?: boolean
   }
   capture: { mode?: 'edit' | 'save' }
+  focusStack: {
+    action: 'sweep' | 'start' | 'finish' | 'cancel'
+    frames?: number
+    mode?: 'edit' | 'save'
+  }
   setBurst: { enabled?: boolean; project?: string | null }
   setFocusPeaking: { enabled?: boolean; level?: 'low' | 'medium' | 'high'; color?: string }
   setReference: {

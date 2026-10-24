@@ -21,6 +21,7 @@ import { useCameraStore } from '@/stores/camera'
 import { useCameraControlsStore, type ControlRange } from '@/stores/camera-controls'
 import { useEditorStore } from '@/stores/editor'
 import { useFocusPeakingStore } from '@/stores/focus-peaking'
+import { useFocusStackStore } from '@/stores/focus-stack'
 import { useReferenceStore } from '@/stores/reference'
 import { useGalleryStore } from '@/stores/gallery'
 import { useMcpStore } from '@/stores/mcp'
@@ -118,6 +119,7 @@ function createActions(): Actions {
   const burst = useBurstStore()
   const peaking = useFocusPeakingStore()
   const reference = useReferenceStore()
+  const stack = useFocusStackStore()
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -169,6 +171,16 @@ function createActions(): Actions {
     ...(peaking.best ? { best: Math.round(peaking.best * 100) / 100 } : {})
   })
 
+  const stackState = (): Record<string, unknown> => ({
+    enabled: stack.enabled,
+    state: stack.state,
+    frames: stack.frames,
+    merged: stack.merged,
+    ...(stack.planned ? { planned: stack.planned } : {}),
+    canSweep: stack.canSweep,
+    sweepFrames: stack.sweepFrames
+  })
+
   const referenceState = (): Record<string, unknown> => ({
     path: reference.path,
     opacity: reference.opacity,
@@ -198,7 +210,8 @@ function createActions(): Actions {
     mirror: settings.mirror,
     burst: burstState(),
     focusPeaking: peakingState(),
-    reference: referenceState()
+    reference: referenceState(),
+    focusStack: stackState()
   })
 
   const settingsState = (): Record<string, unknown> => ({
@@ -350,6 +363,32 @@ function createActions(): Actions {
       }
       return obj
     })
+  }
+
+  /** The live view, ready to take a picture – or why not. */
+  async function requireLiveView(): Promise<void> {
+    if (editor.isOpen) {
+      throw new Error(
+        'Der Editor ist offen – erst speichern (editor_save) oder schließen (editor_close).'
+      )
+    }
+    if (camera.paused) {
+      throw new Error('Die Kamera ist pausiert – set_camera mit paused: false setzt sie fort.')
+    }
+    if (isBlockingOverlayOpen()) {
+      throw new Error('Ein Dialog oder Menü ist offen – erst schließen (z. B. press_key Escape).')
+    }
+    await waitFor(
+      () => !!remotes.camera.value?.canCapture() || cameraProblem(),
+      'Die Kamera ist nicht bereit.'
+    )
+  }
+
+  /** The answer to a picture taken: the saved image, or the editor it opened in. */
+  async function captured(item: GalleryItem | null): Promise<Record<string, unknown>> {
+    if (item) return { saved: imageInfo(item) }
+    await waitForEditor()
+    return { editor: editorSummary() }
   }
 
   /** Why the camera cannot take a picture now, or '' while it may still get ready. */
@@ -561,25 +600,38 @@ function createActions(): Actions {
     },
 
     async capture({ mode = 'edit' }) {
-      if (editor.isOpen) {
+      await requireLiveView()
+      if (stack.busy) throw new Error('Es läuft gerade ein Fokus-Stapel – focus_stack.')
+      const item = await remotes.camera.value!.capture(mode === 'save')
+      return captured(item)
+    },
+
+    async focusStack({ action, frames, mode = 'edit' }) {
+      if (action === 'cancel') {
+        stack.cancel()
+        return stackState()
+      }
+      if (action === 'finish') {
+        if (stack.state !== 'recording') {
+          throw new Error('Es wird gerade kein Fokus-Stapel von Hand aufgenommen – erst start.')
+        }
+        return captured(await stack.finish())
+      }
+      await requireLiveView()
+      if (stack.busy) throw new Error('Es läuft schon ein Fokus-Stapel – finish oder cancel.')
+      // On screen like a click on its button: the bar shows what happens.
+      stack.enabled = true
+      if (action === 'start') {
+        stack.start(mode === 'save')
+        return stackState()
+      }
+      if (!stack.canSweep) {
         throw new Error(
-          'Der Editor ist offen – erst speichern (editor_save) oder schließen (editor_close).'
+          'Diese Kamera stellt den Fokus nicht selbst ein – mit start nimmt die App auf, während der Mensch am Fokus dreht.'
         )
       }
-      if (camera.paused) {
-        throw new Error('Die Kamera ist pausiert – set_camera mit paused: false setzt sie fort.')
-      }
-      if (isBlockingOverlayOpen()) {
-        throw new Error('Ein Dialog oder Menü ist offen – erst schließen (z. B. press_key Escape).')
-      }
-      await waitFor(
-        () => !!remotes.camera.value?.canCapture() || cameraProblem(),
-        'Die Kamera ist nicht bereit.'
-      )
-      const item = await remotes.camera.value!.capture(mode === 'save')
-      if (mode === 'save') return { saved: item && imageInfo(item) }
-      await waitForEditor()
-      return { editor: editorSummary() }
+      if (frames !== undefined) stack.sweepFrames = frames
+      return captured(await stack.sweep(mode === 'save'))
     },
 
     async setFocusPeaking({ enabled, level, color }) {

@@ -92,6 +92,14 @@ die auch später noch Form für Form bearbeitbar bleiben.
   Sonne unten rechts im Livebild öffnet sie. Angezeigt wird nur, was die Kamera anbietet und auch
   wirklich annimmt; CameraDraw merkt es sich pro Kamera und stellt es bei jedem Start wieder ein.
   „Zurücksetzen“ holt die Werte von vorher zurück.
+- **Fokus-Stacking** – Unter dem Mikroskop ist oft nur eine dünne Schicht scharf. Ist der
+  Stapel-Knopf unten rechts an, startet der Auslöser (auch `Leertaste` oder die Foto-Taste) eine
+  Serie: langsam am Fokus durch die ganze Tiefe drehen, ein zweiter Druck setzt die Bilder zu einem
+  durchgehend scharfen zusammen. Kameras, die ihren Fokus selbst verstellen (z. B. Webcams), fahren
+  ihn mit „Automatisch“ von nah bis fern durch (10, 15 oder 25 Bilder) und stellen ihn danach
+  zurück. Dass das Bild beim Fokussieren leicht wächst, gleicht CameraDraw aus; das Ergebnis ist auf
+  den Teil zugeschnitten, den alle Bilder zeigen – nicht skaliert, ein Maßstab bleibt gültig. Es
+  öffnet sich im Editor, mit Serienaufnahme wird es gleich gespeichert.
 - **Schärfehilfe** – Der Knopf mit dem Fokus-Symbol unten rechts lässt im Livebild alle Kanten,
   die gerade scharf sind, farbig aufleuchten (Focus Peaking) – gemessen in voller Auflösung, und
   nur scharfe Kanten, nicht einfach kontrastreiche. Oben zeigt ein Balken, wie scharf die Bildmitte
@@ -112,8 +120,8 @@ die auch später noch Form für Form bearbeitbar bleiben.
 - **Updates in der App** – CameraDraw meldet neue Versionen, lädt sie auf Wunsch herunter und
   installiert sie mit einem Neustart. Die Versionshinweise aller Versionen stehen im Updates-Panel.
 - **KI-Steuerung (MCP)** – Auf Wunsch bedienen KI-Assistenten wie Claude Code die laufende App über
-  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, scharfstellen, zeichnen, nummerieren, messen, speichern – live im
-  Fenster zu sehen. Solange ein Assistent arbeitet, leuchtet der Fensterrand in seinen Farben, oben
+  einen MCP-Server: Bilder auswählen, Kamerabild anhalten, scharfstellen, Fokus-Stapel aufnehmen,
+  zeichnen, nummerieren, messen, speichern – live im Fenster zu sehen. Solange ein Assistent arbeitet, leuchtet der Fensterrand in seinen Farben, oben
   steht, wer gerade was tut („Claude Code zeichnet …“), und ein eigener Zeiger mit seinem Namen
   zeigt, wohin er klickt. Standardmäßig aus.
 
@@ -156,6 +164,7 @@ später in den Einstellungen ändern.
 | -------------------- | ---------------------------------------------------------------------------------------- |
 | `Leertaste`          | Kamerabild anhalten und den Editor öffnen – in der Serienaufnahme: direkt speichern      |
 | `Shift+Leertaste`    | Bild direkt speichern, ohne Editor (Name mit Uhrzeit, ins zuletzt gewählte Projekt)      |
+| `Leertaste` (Stapel) | Mit Fokus-Stacking: Serie starten, nach dem Durchdrehen des Fokus zusammensetzen         |
 | Foto-Taste am Gerät  | wie `Leertaste`, auch bei offener Galerie (USB-Mikroskop, braucht den Hintergrunddienst) |
 | `+` / `−` / `0`      | Zoom vergrößern / verkleinern / zurücksetzen (auch per Mausrad)                          |
 | Zoom-Tasten am Gerät | wie `+` / `−` (USB-Mikroskop, ohne Hintergrunddienst)                                    |

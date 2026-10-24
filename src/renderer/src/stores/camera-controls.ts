@@ -392,7 +392,11 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
     }
   }
 
-  async function setTrackControls(patch: CameraControlValues): Promise<void> {
+  /**
+   * Sets controls of the camera itself – remembered for this camera, unless `keep` is false (a
+   * change for a moment, e.g. the focus while a focus stack sweeps through it).
+   */
+  async function setTrackControls(patch: CameraControlValues, keep = true): Promise<void> {
     const offered = new Set(controls.value.flatMap(namesOf))
     for (const name of Object.keys(patch) as CameraControlName[]) {
       if (offered.has(name)) continue
@@ -410,11 +414,20 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
         change[value] = current
       }
     }
-    remember(change)
+    if (keep) remember(change)
     // Shown at once, so a slider follows the pointer; the camera's answer replaces it.
     values.value = { ...values.value, ...change }
     wanted = { ...wanted, ...change }
     await drain()
+  }
+
+  /**
+   * Sets controls of the camera for a moment, without remembering them – put back with the values
+   * from before the same way. Throws if the camera refuses or is not live.
+   */
+  async function setTemporarily(patch: CameraControlValues): Promise<void> {
+    if (!track) throw new Error('Die Kamera läuft gerade nicht.')
+    await setTrackControls(patch, false)
   }
 
   /** Switches an auto control between the camera's automatic and its manual value. */
@@ -459,6 +472,7 @@ export const useCameraControlsStore = defineStore('cameraControls', () => {
     changed,
     isAuto,
     set,
+    setTemporarily,
     setAuto,
     reset
   }
